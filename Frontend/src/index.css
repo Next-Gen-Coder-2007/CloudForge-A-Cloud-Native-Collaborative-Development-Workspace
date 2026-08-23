@@ -1,1 +1,68 @@
 @import 'tailwindcss';
+
+html.dark,
+html.dark body {
+  background-color: #000000;
+  color: #ffffff;
+  color-scheme: dark;
+}
+
+html.light,
+html.light body {
+  background-color: #ffffff;
+  color: #000000;
+  color-scheme: light;
+}
+
+/* Custom Sleek Scrollbar for Pitch Black Dark Mode */
+html.dark ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+html.dark ::-webkit-scrollbar-track {
+  background: #000000;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 3px;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #404040;
+}
+
+/* Custom Sleek Scrollbar for Pure White Light Mode */
+html.light ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+html.light ::-webkit-scrollbar-track {
+  background: #ffffff;
+}
+html.light ::-webkit-scrollbar-thumb {
+  background: #d4d4d4;
+  border-radius: 3px;
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #a3a3a3;
+}
+
+/* Single-Layer Professional Code Editor */
+.cf-code-textarea {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, monospace !important;
+  font-feature-settings: "liga" 0, "calt" 0 !important;
+  font-variant-ligatures: none !important;
+  letter-spacing: 0px !important;
+  word-spacing: 0px !important;
+  tab-size: 2 !important;
+  -moz-tab-size: 2 !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+textarea.cf-code-textarea::selection {
+  background-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+textarea.cf-code-textarea::-moz-selection {
+  background-color: rgba(59, 130, 246, 0.35) !important;
+}
