@@ -23,13 +23,23 @@ import { type EditorTab } from "../../types/workspace";
 import { formatCode } from "./editor/codeFormatter";
 import { useTheme } from "../../context/ThemeContext";
 
+import { MarkdownViewer } from "./viewers/MarkdownViewer";
+import { MermaidViewer } from "./viewers/MermaidViewer";
+import { LatexViewer } from "./viewers/LatexViewer";
+import { PdfViewer } from "./viewers/PdfViewer";
+import { ImageViewer } from "./viewers/ImageViewer";
+import { SpreadsheetViewer } from "./viewers/SpreadsheetViewer";
+import { DocxViewer } from "./viewers/DocxViewer";
+import { PptxViewer } from "./viewers/PptxViewer";
+import { MediaViewer } from "./viewers/MediaViewer";
+
 interface CodeEditorProps {
   tabs: EditorTab[];
   activeTabId: string | null;
   onSelectTab: (fileId: string) => void;
   onCloseTab: (fileId: string) => void;
   onContentChange: (fileId: string, newContent: string) => void;
-  onSaveFile: (fileId: string) => Promise<void>;
+  onSaveFile: (fileId: string, isSilent?: boolean) => Promise<void>;
   projectName: string;
 }
 
@@ -128,12 +138,12 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     localStorage.setItem("cf_editor_auto_save", autoSave.toString());
   }, [autoSave]);
 
-  // Auto-Save Effect (debounced 1200ms)
+  // Auto-Save Effect (debounced 1200ms) - completely silent background saving
   useEffect(() => {
     if (!autoSave || !activeTab || !activeTab.isDirty) return;
 
     const timer = setTimeout(() => {
-      onSaveFile(activeTab.fileId);
+      onSaveFile(activeTab.fileId, true);
     }, 1200);
 
     return () => clearTimeout(timer);
@@ -145,6 +155,22 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     if (!activeTab) return "javascript";
     return getMonacoLanguage(activeTab.language, activeTab.name);
   }, [activeTab, customLanguage]);
+
+  // Specialized file preview types
+  const activeExt = (activeTab ? activeTab.name.split(".").pop() || "" : "").toLowerCase();
+  const lowerName = (activeTab?.name || "").toLowerCase();
+
+  const isMarkdown = activeExt === "md" || activeExt === "markdown" || lowerName.startsWith("readme");
+  const isMermaid = activeExt === "mermaid" || activeExt === "mmd";
+  const isLatex = ["tex", "latex", "bib", "sty", "cls"].includes(activeExt);
+  const isPdf = activeExt === "pdf";
+  const isImage = ["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp", "avif"].includes(activeExt);
+  const isSpreadsheet = ["xlsx", "xls", "csv", "tsv"].includes(activeExt);
+  const isDocx = ["docx", "doc"].includes(activeExt);
+  const isPptx = ["pptx", "ppt", "ppsx"].includes(activeExt);
+  const isMedia = ["mp3", "wav", "ogg", "mp4", "webm", "mov"].includes(activeExt);
+
+  const isSpecializedViewer = isMarkdown || isMermaid || isLatex || isPdf || isImage || isSpreadsheet || isDocx || isPptx || isMedia;
 
   // Reset custom language when tab changes
   useEffect(() => {
@@ -545,122 +571,157 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           })}
         </div>
 
-        {/* Toolbar Controls */}
+        {/* Toolbar Controls (Always accessible for all files, with Monaco specific tools when editing code) */}
         <div className="flex items-center gap-1 shrink-0 px-2 relative z-40 overflow-visible">
-          {/* Diagnostic status badge on toolbar */}
-          {(diagnosticsCount.errors > 0 || diagnosticsCount.warnings > 0) && (
-            <button
-              onClick={jumpToNextDiagnostic}
-              className={`px-2 py-0.5 rounded flex items-center gap-1 text-[11px] font-bold transition-all cursor-pointer mr-1 ${
-                diagnosticsCount.errors > 0
-                  ? "bg-rose-500/15 text-rose-400 border border-rose-500/30 hover:bg-rose-500/25"
-                  : "bg-sky-500/15 text-sky-400 border border-sky-500/30 hover:bg-sky-500/25"
-              }`}
-              title="Click to jump to next error"
-            >
-              {diagnosticsCount.errors > 0 ? (
-                <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
-              ) : (
-                <AlertTriangle className="w-3 h-3 text-sky-400 shrink-0" />
+          {/* Monaco-specific tools */}
+          {!isSpecializedViewer && (
+            <>
+              {/* Diagnostic status badge on toolbar */}
+              {(diagnosticsCount.errors > 0 || diagnosticsCount.warnings > 0) && (
+                <button
+                  onClick={jumpToNextDiagnostic}
+                  className={`px-2 py-0.5 rounded flex items-center gap-1 text-[11px] font-bold transition-all cursor-pointer mr-1 ${
+                    diagnosticsCount.errors > 0
+                      ? "bg-rose-500/15 text-rose-400 border border-rose-500/30 hover:bg-rose-500/25"
+                      : "bg-sky-500/15 text-sky-400 border border-sky-500/30 hover:bg-sky-500/25"
+                  }`}
+                  title="Click to jump to next error"
+                >
+                  {diagnosticsCount.errors > 0 ? (
+                    <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-3 h-3 text-sky-400 shrink-0" />
+                  )}
+                  <span>
+                    {diagnosticsCount.errors > 0
+                      ? `${diagnosticsCount.errors} error${diagnosticsCount.errors > 1 ? "s" : ""}`
+                      : `${diagnosticsCount.warnings} warn`}
+                  </span>
+                </button>
               )}
-              <span>
-                {diagnosticsCount.errors > 0
-                  ? `${diagnosticsCount.errors} error${diagnosticsCount.errors > 1 ? "s" : ""}`
-                  : `${diagnosticsCount.warnings} warn`}
-              </span>
-            </button>
+
+              {/* Auto Format / Beautify */}
+              <button
+                onClick={handleAutoFormat}
+                className={`p-1.5 rounded transition-colors cursor-pointer ${
+                  isDark ? "hover:bg-neutral-800 text-neutral-300" : "hover:bg-neutral-200 text-neutral-700"
+                }`}
+                title="Auto-format code (Alt+Shift+F)"
+              >
+                {formattedFeedback ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                )}
+              </button>
+
+              {/* Find & Replace Toggle */}
+              <button
+                onClick={handleToggleFind}
+                className={`p-1.5 rounded transition-colors cursor-pointer ${
+                  isDark ? "hover:bg-neutral-800 text-neutral-300" : "hover:bg-neutral-200 text-neutral-700"
+                }`}
+                title="Find and Replace (Ctrl+F)"
+              >
+                <Search className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Word Wrap Toggle */}
+              <button
+                onClick={() => setWordWrap((v) => !v)}
+                className={`p-1.5 rounded transition-colors cursor-pointer ${
+                  wordWrap
+                    ? isDark
+                      ? "bg-blue-600/30 text-blue-400 font-bold"
+                      : "bg-blue-100 text-blue-800 font-bold"
+                    : isDark
+                    ? "hover:bg-neutral-800 text-neutral-400"
+                    : "hover:bg-neutral-200 text-neutral-600"
+                }`}
+                title={wordWrap ? "Word Wrap: Enabled" : "Word Wrap: Disabled"}
+              >
+                <WrapText className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Minimap Toggle */}
+              <button
+                onClick={() => setShowMinimap((v) => !v)}
+                className={`p-1.5 rounded transition-colors cursor-pointer ${
+                  showMinimap
+                    ? isDark
+                      ? "bg-blue-600/30 text-blue-400 font-bold"
+                      : "bg-blue-100 text-blue-800 font-bold"
+                    : isDark
+                    ? "hover:bg-neutral-800 text-neutral-400"
+                    : "hover:bg-neutral-200 text-neutral-600"
+                }`}
+                title={showMinimap ? "Hide Minimap" : "Show Minimap"}
+              >
+                <Map className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Zoom Out */}
+              <button
+                onClick={() => setFontSize((s) => Math.max(10, s - 1))}
+                className={`p-1.5 rounded transition-colors cursor-pointer ${
+                  isDark ? "hover:bg-neutral-800 text-neutral-300" : "hover:bg-neutral-200 text-neutral-700"
+                }`}
+                title="Zoom Out (Smaller Font)"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Zoom In */}
+              <button
+                onClick={() => setFontSize((s) => Math.min(24, s + 1))}
+                className={`p-1.5 rounded transition-colors cursor-pointer ${
+                  isDark ? "hover:bg-neutral-800 text-neutral-300" : "hover:bg-neutral-200 text-neutral-700"
+                }`}
+                title="Zoom In (Larger Font)"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Copy Code */}
+              <button
+                onClick={handleCopy}
+                className={`p-1.5 rounded transition-colors cursor-pointer ${
+                  isDark ? "hover:bg-neutral-800 text-neutral-300" : "hover:bg-neutral-200 text-neutral-700"
+                }`}
+                title="Copy all code"
+              >
+                {copied ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </>
           )}
 
-          {/* Auto-Save Toggle */}
+          {/* Auto-Save Toggle (Available for ALL files: MD, Code, TeX, CSV, etc.) */}
           <button
             onClick={() => setAutoSave((v) => !v)}
-            className={`p-1.5 rounded transition-colors cursor-pointer flex items-center gap-1 text-[11px] font-semibold ${
+            className={`px-2 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 text-[11px] font-medium border ${
               autoSave
-                ? "bg-blue-600/25 text-blue-400 border border-blue-500/40 font-bold"
-                : "hover:bg-white/10 opacity-60 hover:opacity-100"
+                ? isDark
+                  ? "bg-blue-500/20 text-blue-400 border-blue-500/40 font-bold shadow-xs"
+                  : "bg-blue-100 text-blue-800 border-blue-300 font-bold shadow-xs"
+                : isDark
+                ? "text-neutral-400 hover:text-white hover:bg-neutral-800 border-transparent"
+                : "text-neutral-700 hover:text-black hover:bg-neutral-200 border-transparent"
             }`}
-            title={autoSave ? "Auto-Save: Enabled (Saves automatically after typing)" : "Auto-Save: Disabled (Click to enable)"}
+            title={
+              autoSave
+                ? "Auto-Save: Enabled (Changes save automatically after typing)"
+                : "Auto-Save: Disabled (Click to enable automatic saving)"
+            }
           >
-            <Zap className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline">Auto-Save</span>
+            <Zap className={`w-3.5 h-3.5 ${autoSave ? (isDark ? "text-blue-400" : "text-blue-600") : ""}`} />
+            <span className="inline">Auto-Save: {autoSave ? "ON" : "OFF"}</span>
           </button>
 
-          {/* Auto Format / Beautify */}
-          <button
-            onClick={handleAutoFormat}
-            className="p-1.5 rounded hover:bg-white/10 opacity-70 hover:opacity-100 transition-colors cursor-pointer"
-            title="Auto-format code (Alt+Shift+F)"
-          >
-            {formattedFeedback ? (
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-            ) : (
-              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-            )}
-          </button>
-
-          {/* Find & Replace Toggle */}
-          <button
-            onClick={handleToggleFind}
-            className="p-1.5 rounded hover:bg-white/10 opacity-70 hover:opacity-100 transition-colors cursor-pointer"
-            title="Find and Replace (Ctrl+F)"
-          >
-            <Search className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Word Wrap Toggle */}
-          <button
-            onClick={() => setWordWrap((v) => !v)}
-            className={`p-1.5 rounded transition-colors cursor-pointer ${
-              wordWrap ? "bg-blue-600/30 text-blue-400 font-bold" : "hover:bg-white/10 opacity-60 hover:opacity-100"
-            }`}
-            title={wordWrap ? "Word Wrap: Enabled" : "Word Wrap: Disabled"}
-          >
-            <WrapText className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Minimap Toggle */}
-          <button
-            onClick={() => setShowMinimap((v) => !v)}
-            className={`p-1.5 rounded transition-colors cursor-pointer ${
-              showMinimap ? "bg-blue-600/30 text-blue-400 font-bold" : "hover:bg-white/10 opacity-60 hover:opacity-100"
-            }`}
-            title={showMinimap ? "Hide Minimap" : "Show Minimap"}
-          >
-            <Map className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Zoom Out */}
-          <button
-            onClick={() => setFontSize((s) => Math.max(10, s - 1))}
-            className="p-1.5 rounded hover:bg-white/10 opacity-60 hover:opacity-100 transition-colors cursor-pointer"
-            title="Zoom Out (Smaller Font)"
-          >
-            <ZoomOut className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Zoom In */}
-          <button
-            onClick={() => setFontSize((s) => Math.min(24, s + 1))}
-            className="p-1.5 rounded hover:bg-white/10 opacity-60 hover:opacity-100 transition-colors cursor-pointer"
-            title="Zoom In (Larger Font)"
-          >
-            <ZoomIn className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Copy Code */}
-          <button
-            onClick={handleCopy}
-            className="p-1.5 rounded hover:bg-white/10 opacity-60 hover:opacity-100 transition-colors cursor-pointer"
-            title="Copy all code"
-          >
-            {copied ? (
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-            ) : (
-              <Copy className="w-3.5 h-3.5" />
-            )}
-          </button>
-
-          {/* Save Button */}
+          {/* Save Button (Shown whenever active file has unsaved changes) */}
           {activeTab.isDirty && (
             <button
               onClick={() => onSaveFile(activeTab.fileId)}
@@ -675,196 +736,286 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         </div>
       </div>
 
-      {/* Breadcrumb Path Bar */}
-      <div
-        style={{
-          backgroundColor: gutterBg,
-          borderColor: borderColor,
-        }}
-        className="h-6 px-3 border-b flex items-center justify-between text-[11px] font-mono opacity-80 shrink-0 relative z-20 overflow-visible"
-      >
-        <div className="flex items-center gap-1 truncate max-w-[65%] sm:max-w-[75%]">
-          {breadcrumbParts.map((part, index) => (
-            <React.Fragment key={index}>
-              {index > 0 && <ChevronRight className="w-3 h-3 opacity-40 shrink-0" />}
-              <span
-                className={`truncate ${
-                  index === breadcrumbParts.length - 1
-                    ? "font-bold text-inherit"
-                    : "opacity-60 hidden sm:inline"
-                }`}
-              >
-                {part}
-              </span>
-            </React.Fragment>
-          ))}
+      {/* Main Body: Render Specialized Previewers or Standard Monaco Code Editor */}
+      {isMarkdown ? (
+        <div className="flex-1 overflow-hidden">
+          <MarkdownViewer
+            content={activeTab.content}
+            filename={activeTab.name}
+            isDirty={activeTab.isDirty}
+            onContentChange={(val) => onContentChange(activeTab.fileId, val)}
+            onSave={() => onSaveFile(activeTab.fileId)}
+          />
         </div>
-
-        {/* Language Override Selector */}
-        <div className="relative flex items-center gap-2 shrink-0 overflow-visible">
-          <button
-            onClick={() => setShowLangMenu((v) => !v)}
-            className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded hover:bg-white/10 opacity-75 hover:opacity-100 transition-colors cursor-pointer"
-            title="Change Syntax Highlighting"
+      ) : isMermaid ? (
+        <div className="flex-1 overflow-hidden">
+          <MermaidViewer
+            content={activeTab.content}
+            filename={activeTab.name}
+            isDirty={activeTab.isDirty}
+            onContentChange={(val) => onContentChange(activeTab.fileId, val)}
+            onSave={() => onSaveFile(activeTab.fileId)}
+          />
+        </div>
+      ) : isLatex ? (
+        <div className="flex-1 overflow-hidden">
+          <LatexViewer
+            content={activeTab.content}
+            filename={activeTab.name}
+            isDirty={activeTab.isDirty}
+            onContentChange={(val) => onContentChange(activeTab.fileId, val)}
+            onSave={() => onSaveFile(activeTab.fileId)}
+          />
+        </div>
+      ) : isPdf ? (
+        <div className="flex-1 overflow-hidden">
+          <PdfViewer
+            content={activeTab.content}
+            filename={activeTab.name}
+            size={activeTab.content ? Math.round((activeTab.content.length * 3) / 4) : 0}
+          />
+        </div>
+      ) : isImage ? (
+        <div className="flex-1 overflow-hidden">
+          <ImageViewer
+            content={activeTab.content}
+            filename={activeTab.name}
+            size={activeTab.content ? Math.round((activeTab.content.length * 3) / 4) : 0}
+          />
+        </div>
+      ) : isSpreadsheet ? (
+        <div className="flex-1 overflow-hidden">
+          <SpreadsheetViewer
+            content={activeTab.content}
+            filename={activeTab.name}
+            isDirty={activeTab.isDirty}
+            onContentChange={(val) => onContentChange(activeTab.fileId, val)}
+            onSave={() => onSaveFile(activeTab.fileId)}
+          />
+        </div>
+      ) : isDocx ? (
+        <div className="flex-1 overflow-hidden">
+          <DocxViewer
+            content={activeTab.content}
+            filename={activeTab.name}
+            size={activeTab.content ? Math.round((activeTab.content.length * 3) / 4) : 0}
+          />
+        </div>
+      ) : isPptx ? (
+        <div className="flex-1 overflow-hidden">
+          <PptxViewer
+            content={activeTab.content}
+            filename={activeTab.name}
+            size={activeTab.content ? Math.round((activeTab.content.length * 3) / 4) : 0}
+          />
+        </div>
+      ) : isMedia ? (
+        <div className="flex-1 overflow-hidden">
+          <MediaViewer
+            content={activeTab.content}
+            filename={activeTab.name}
+            size={activeTab.content ? Math.round((activeTab.content.length * 3) / 4) : 0}
+          />
+        </div>
+      ) : (
+        /* Standard Monaco Editor Layout */
+        <>
+          {/* Breadcrumb Path Bar */}
+          <div
+            style={{
+              backgroundColor: gutterBg,
+              borderColor: borderColor,
+            }}
+            className="h-6 px-3 border-b flex items-center justify-between text-[11px] font-mono opacity-80 shrink-0 relative z-20 overflow-visible"
           >
-            <Layers className="w-3 h-3 text-blue-400" />
-            <span>{activeLanguage}</span>
-          </button>
-
-          {showLangMenu && (
-            <>
-              <div
-                onClick={() => setShowLangMenu(false)}
-                className="fixed inset-0 z-40 bg-black/10"
-              />
-              <div
-                style={{
-                  backgroundColor: toolbarBg,
-                  borderColor: borderColor,
-                  color: textColor,
-                }}
-                className="absolute right-0 top-full mt-1.5 w-48 rounded-xl border shadow-2xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 max-h-72 overflow-y-auto"
-              >
-                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider opacity-50 border-b border-white/10 mb-1">
-                  Syntax Modes ({SUPPORTED_LANGUAGES.length})
-                </div>
-                {SUPPORTED_LANGUAGES.map((lang) => (
-                  <button
-                    key={lang.id}
-                    onClick={() => {
-                      setCustomLanguage(lang.id);
-                      setShowLangMenu(false);
-                    }}
-                    className={`w-full px-3 py-1.5 text-left text-xs hover:bg-white/10 transition-colors cursor-pointer ${
-                      activeLanguage === lang.id ? "font-bold bg-white/10 text-cyan-400" : "opacity-80"
+            <div className="flex items-center gap-1 truncate max-w-[65%] sm:max-w-[75%]">
+              {breadcrumbParts.map((part, index) => (
+                <React.Fragment key={index}>
+                  {index > 0 && <ChevronRight className="w-3 h-3 opacity-40 shrink-0" />}
+                  <span
+                    className={`truncate ${
+                      index === breadcrumbParts.length - 1
+                        ? "font-bold text-inherit"
+                        : "opacity-60 hidden sm:inline"
                     }`}
                   >
-                    {lang.label}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+                    {part}
+                  </span>
+                </React.Fragment>
+              ))}
+            </div>
 
-      {/* Editor Body with Microsoft Monaco Editor Engine */}
-      <div className="flex-1 overflow-hidden relative">
-        <Editor
-          height="100%"
-          path={activeTab.path.startsWith("/") ? activeTab.path : `/${activeTab.path}`}
-          language={activeLanguage}
-          value={activeTab.content}
-          theme={currentTheme}
-          beforeMount={handleEditorWillMount}
-          onMount={handleEditorDidMount}
-          onChange={(val) => onContentChange(activeTab.fileId, val || "")}
-          options={{
-            fontSize,
-            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, Monaco, Consolas, monospace",
-            fontLigatures: true,
-            lineHeight: Math.max(18, Math.round(fontSize * 1.6)),
-            tabSize: 2,
-            wordWrap: wordWrap ? "on" : "off",
-            minimap: {
-              enabled: showMinimap,
-              renderCharacters: false,
-              side: "right",
-            },
-            scrollBeyondLastLine: false,
-            smoothScrolling: true,
-            cursorBlinking: "smooth",
-            cursorSmoothCaretAnimation: "on",
-            automaticLayout: true,
-            renderLineHighlight: "all",
-            renderWhitespace: "selection",
-            bracketPairColorization: { enabled: true },
-            guides: {
-              bracketPairs: true,
-              indentation: true,
-            },
-            padding: {
-              top: 12,
-              bottom: 12,
-            },
-            overviewRulerBorder: false,
-            hideCursorInOverviewRuler: true,
-            folding: true,
-            showFoldingControls: "mouseover",
-            lineNumbersMinChars: 3,
-            glyphMargin: false,
-          }}
-        />
-      </div>
+            {/* Language Override Selector */}
+            <div className="relative flex items-center gap-2 shrink-0 overflow-visible">
+              <button
+                onClick={() => setShowLangMenu((v) => !v)}
+                className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded hover:bg-white/10 opacity-75 hover:opacity-100 transition-colors cursor-pointer"
+                title="Change Syntax Highlighting"
+              >
+                <Layers className="w-3 h-3 text-blue-400" />
+                <span>{activeLanguage}</span>
+              </button>
 
-      {/* Editor Status Bar with VS Code Error/Warning Counter */}
-      <div
-        style={{
-          backgroundColor: bg,
-          borderColor: borderColor,
-          color: isDark ? "#a3a3a3" : "#525252",
-        }}
-        className="h-6 px-3 border-t flex items-center justify-between text-[10px] font-mono select-none shrink-0"
-      >
-        <div className="flex items-center gap-3">
-          {/* Error/Warning Counter from Monaco */}
-          <button
-            onClick={jumpToNextDiagnostic}
-            className={`flex items-center gap-1.5 font-semibold px-1.5 py-0.5 rounded transition-colors cursor-pointer ${
-              diagnosticsCount.errors > 0
-                ? "text-rose-400 hover:bg-rose-500/10"
-                : diagnosticsCount.warnings > 0
-                ? "text-sky-400 hover:bg-sky-500/10"
-                : "text-emerald-400 hover:bg-emerald-500/10"
-            }`}
-            title="Click to jump to next diagnostic"
+              {showLangMenu && (
+                <>
+                  <div
+                    onClick={() => setShowLangMenu(false)}
+                    className="fixed inset-0 z-40 bg-black/10"
+                  />
+                  <div
+                    style={{
+                      backgroundColor: toolbarBg,
+                      borderColor: borderColor,
+                      color: textColor,
+                    }}
+                    className="absolute right-0 top-full mt-1.5 w-48 rounded-xl border shadow-2xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 max-h-72 overflow-y-auto"
+                  >
+                    <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider opacity-50 border-b border-white/10 mb-1">
+                      Syntax Modes ({SUPPORTED_LANGUAGES.length})
+                    </div>
+                    {SUPPORTED_LANGUAGES.map((lang) => (
+                      <button
+                        key={lang.id}
+                        onClick={() => {
+                          setCustomLanguage(lang.id);
+                          setShowLangMenu(false);
+                        }}
+                        className={`w-full px-3 py-1.5 text-left text-xs hover:bg-white/10 transition-colors cursor-pointer ${
+                          activeLanguage === lang.id ? "font-bold bg-white/10 text-cyan-400" : "opacity-80"
+                        }`}
+                      >
+                        {lang.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Editor Body with Microsoft Monaco Editor Engine */}
+          <div className="flex-1 overflow-hidden relative">
+            <Editor
+              height="100%"
+              path={activeTab.path.startsWith("/") ? activeTab.path : `/${activeTab.path}`}
+              language={activeLanguage}
+              value={activeTab.content}
+              theme={currentTheme}
+              beforeMount={handleEditorWillMount}
+              onMount={handleEditorDidMount}
+              onChange={(val) => onContentChange(activeTab.fileId, val || "")}
+              options={{
+                fontSize,
+                fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, Monaco, Consolas, monospace",
+                fontLigatures: true,
+                lineHeight: Math.max(18, Math.round(fontSize * 1.6)),
+                tabSize: 2,
+                wordWrap: wordWrap ? "on" : "off",
+                minimap: {
+                  enabled: showMinimap,
+                  renderCharacters: false,
+                  side: "right",
+                },
+                scrollBeyondLastLine: false,
+                smoothScrolling: true,
+                cursorBlinking: "smooth",
+                cursorSmoothCaretAnimation: "on",
+                automaticLayout: true,
+                renderLineHighlight: "all",
+                renderWhitespace: "selection",
+                bracketPairColorization: { enabled: true },
+                guides: {
+                  bracketPairs: true,
+                  indentation: true,
+                },
+                padding: {
+                  top: 12,
+                  bottom: 12,
+                },
+                overviewRulerBorder: false,
+                hideCursorInOverviewRuler: true,
+                folding: true,
+                showFoldingControls: "mouseover",
+                lineNumbersMinChars: 3,
+                glyphMargin: false,
+              }}
+            />
+          </div>
+
+          {/* Editor Status Bar with VS Code Error/Warning Counter */}
+          <div
+            style={{
+              backgroundColor: bg,
+              borderColor: borderColor,
+              color: isDark ? "#a3a3a3" : "#525252",
+            }}
+            className="h-6 px-3 border-t flex items-center justify-between text-[10px] font-mono select-none shrink-0"
           >
-            {diagnosticsCount.errors > 0 ? (
-              <>
-                <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
-                <span>{diagnosticsCount.errors}</span>
-                {diagnosticsCount.warnings > 0 && (
+            <div className="flex items-center gap-3">
+              {/* Error/Warning Counter from Monaco */}
+              <button
+                onClick={jumpToNextDiagnostic}
+                className={`flex items-center gap-1.5 font-semibold px-1.5 py-0.5 rounded transition-colors cursor-pointer ${
+                  diagnosticsCount.errors > 0
+                    ? "text-rose-400 hover:bg-rose-500/10"
+                    : diagnosticsCount.warnings > 0
+                    ? "text-sky-400 hover:bg-sky-500/10"
+                    : "text-emerald-400 hover:bg-emerald-500/10"
+                }`}
+                title="Click to jump to next diagnostic"
+              >
+                {diagnosticsCount.errors > 0 ? (
                   <>
-                    <AlertTriangle className="w-3 h-3 text-sky-400 shrink-0 ml-1" />
+                    <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                    <span>{diagnosticsCount.errors}</span>
+                    {diagnosticsCount.warnings > 0 && (
+                      <>
+                        <AlertTriangle className="w-3 h-3 text-sky-400 shrink-0 ml-1" />
+                        <span>{diagnosticsCount.warnings}</span>
+                      </>
+                    )}
+                  </>
+                ) : diagnosticsCount.warnings > 0 ? (
+                  <>
+                    <AlertTriangle className="w-3 h-3 text-sky-400 shrink-0" />
                     <span>{diagnosticsCount.warnings}</span>
                   </>
+                ) : (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                    <span>0 errors</span>
+                  </>
                 )}
-              </>
-            ) : diagnosticsCount.warnings > 0 ? (
-              <>
-                <AlertTriangle className="w-3 h-3 text-sky-400 shrink-0" />
-                <span>{diagnosticsCount.warnings}</span>
-              </>
-            ) : (
-              <>
-                <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                <span>0 errors</span>
-              </>
-            )}
-          </button>
+              </button>
 
-          {/* Auto-Save Status Bar Button */}
-          <button
-            onClick={() => setAutoSave((v) => !v)}
-            className="opacity-70 hover:opacity-100 hover:text-blue-400 transition-colors cursor-pointer flex items-center gap-1"
-            title="Click to toggle Auto-Save"
-          >
-            <Zap className="w-2.5 h-2.5 text-blue-400" />
-            <span>Auto-Save: {autoSave ? "ON" : "OFF"}</span>
-          </button>
+              {/* Auto-Save Status Bar Button */}
+              <button
+                onClick={() => setAutoSave((v) => !v)}
+                className={`transition-colors cursor-pointer flex items-center gap-1 font-mono text-[11px] ${
+                  isDark
+                    ? "text-neutral-400 hover:text-blue-400"
+                    : "text-neutral-700 hover:text-blue-600 font-semibold"
+                }`}
+                title="Click to toggle Auto-Save"
+              >
+                <Zap className={`w-3 h-3 ${autoSave ? (isDark ? "text-blue-400" : "text-blue-600") : "opacity-60"}`} />
+                <span>Auto-Save: {autoSave ? "ON" : "OFF"}</span>
+              </button>
 
-          <span className="hidden sm:inline opacity-60">UTF-8</span>
-          <span className="hidden md:inline opacity-60">{activeLanguage.toUpperCase()}</span>
-        </div>
+              <span className="hidden sm:inline opacity-60">UTF-8</span>
+              <span className="hidden md:inline opacity-60">{activeLanguage.toUpperCase()}</span>
+            </div>
 
-        <div className="flex items-center gap-3">
-          <span>
-            Ln <strong className="text-inherit">{cursorPos.line}</strong>, Col <strong className="text-inherit">{cursorPos.col}</strong>
-          </span>
-          <span className="opacity-60 hidden sm:inline">{rawLinesCount} lines</span>
-          <span className="opacity-60 hidden lg:inline">{charCount} chars</span>
-        </div>
-      </div>
+            <div className="flex items-center gap-3">
+              <span>
+                Ln <strong className="text-inherit">{cursorPos.line}</strong>, Col <strong className="text-inherit">{cursorPos.col}</strong>
+              </span>
+              <span className="opacity-60 hidden sm:inline">{rawLinesCount} lines</span>
+              <span className="opacity-60 hidden lg:inline">{charCount} chars</span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
