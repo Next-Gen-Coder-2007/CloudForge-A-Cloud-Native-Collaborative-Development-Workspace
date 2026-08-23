@@ -1,95 +1,74 @@
 import React from "react";
-import {
-  GitBranch,
-  RefreshCw,
-  Terminal,
-  Cloud,
-} from "lucide-react";
+import { GitBranch, Cloud } from "lucide-react";
+import { useTheme } from "../../context/ThemeContext";
 
 interface StatusBarProps {
   currentBranch: string;
-  isGitHubConnected: boolean;
   changedFilesCount: number;
   activeLanguage?: string;
   cursorPos?: { line: number; col: number };
-  isBottomPanelOpen: boolean;
-  onToggleBottomPanel: () => void;
   onOpenSourceControl: () => void;
-  onSyncGitHub?: () => void;
-  isSyncing?: boolean;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
   currentBranch,
-  isGitHubConnected,
   changedFilesCount,
   activeLanguage = "TypeScript",
   cursorPos = { line: 1, col: 1 },
-  isBottomPanelOpen,
-  onToggleBottomPanel,
   onOpenSourceControl,
-  onSyncGitHub,
-  isSyncing = false,
 }) => {
+  const { isDark } = useTheme();
+
   return (
-    <footer className="h-6 bg-slate-100 border-t border-slate-200 text-slate-600 flex items-center justify-between px-3 text-[11px] font-mono select-none shrink-0 z-10">
+    <footer className={`h-6 border-t flex items-center justify-between px-3 text-[11px] font-mono select-none shrink-0 z-10 font-sans transition-colors duration-150 ${
+      isDark
+        ? "bg-black border-neutral-800 text-neutral-400"
+        : "bg-white border-neutral-200 text-neutral-600"
+    }`}>
       <div className="flex items-center gap-3">
         <button
           onClick={onOpenSourceControl}
-          className="flex items-center gap-1.5 hover:bg-slate-200 px-1.5 py-0.5 rounded transition-colors text-slate-800 font-semibold"
-          title="Switch Branch / View Source Control"
+          className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-colors font-semibold cursor-pointer ${
+            isDark
+              ? "text-neutral-200 hover:bg-blue-500/20 hover:text-blue-300"
+              : "text-neutral-800 hover:bg-blue-100 hover:text-blue-900"
+          }`}
+          title="Switch Branch / View CloudForge Source Control"
         >
-          <GitBranch className="w-3 h-3 text-blue-600" />
+          <GitBranch className="w-3 h-3 text-blue-500" />
           <span>{currentBranch}</span>
         </button>
-
-        {isGitHubConnected ? (
-          <button
-            onClick={onSyncGitHub}
-            disabled={isSyncing}
-            className="flex items-center gap-1 hover:bg-slate-200 px-1.5 py-0.5 rounded transition-colors text-slate-700"
-            title="Sync with GitHub Remote"
-          >
-            <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin text-blue-600" : ""}`} />
-            <span className="hidden sm:inline">0↓ 0↑</span>
-          </button>
-        ) : null}
 
         {changedFilesCount > 0 && (
           <button
             onClick={onOpenSourceControl}
-            className="flex items-center gap-1 bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded text-[10px] font-bold"
+            className={`flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold cursor-pointer ${
+              isDark
+                ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                : "bg-blue-100 text-blue-800"
+            }`}
           >
             <span>{changedFilesCount} pending changes</span>
           </button>
         )}
-
-        <button
-          onClick={onToggleBottomPanel}
-          className={`flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-200 transition-colors ${
-            isBottomPanelOpen ? "bg-slate-200 text-slate-900 font-bold" : "text-slate-600"
-          }`}
-          title="Toggle Terminal & Output Panel"
-        >
-          <Terminal className="w-3 h-3" />
-          <span className="hidden md:inline">Terminal</span>
-        </button>
       </div>
 
-      <div className="flex items-center gap-3">
-        <span className="hidden sm:inline text-slate-500">
+      <div className="flex items-center gap-3 font-mono">
+        <span className={`hidden sm:inline ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
           Ln {cursorPos.line}, Col {cursorPos.col}
         </span>
-        <span className="hidden md:inline text-slate-500">UTF-8</span>
-        <span className="hidden sm:inline text-slate-500">Spaces: 2</span>
-        <span className="font-semibold text-slate-700">{activeLanguage}</span>
+        <span className="hidden md:inline opacity-70">UTF-8</span>
+        <span className="hidden sm:inline opacity-70">Spaces: 2</span>
+        <span className={`font-semibold ${isDark ? "text-white" : "text-black"}`}>
+          {activeLanguage}
+        </span>
 
         <div
-          className="flex items-center gap-1 text-emerald-600 font-bold"
-          title="CloudForge Cloud Workspace Engine: Connected"
+          className="flex items-center gap-1 text-blue-500 font-bold"
+          title="CloudForge Native Version Control: Online"
         >
           <Cloud className="w-3 h-3" />
-          <span className="hidden lg:inline">CloudForge Ready</span>
+          <span className="hidden lg:inline">CloudForge VCS</span>
         </div>
       </div>
     </footer>

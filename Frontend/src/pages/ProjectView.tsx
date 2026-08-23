@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import JSZip from "jszip";
 import API_URL from "../config/api";
 import { useAlert } from "../hooks/useAlert";
+import { useTheme } from "../context/ThemeContext";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import { type Project } from "../types/project";
 import {
@@ -16,18 +17,21 @@ import { WorkspaceNavbar } from "../components/workspace/WorkspaceNavbar";
 import { ActivityBar } from "../components/workspace/ActivityBar";
 import { FileExplorer } from "../components/workspace/FileExplorer";
 import { SourceControlPanel } from "../components/workspace/SourceControlPanel";
+import { VCSHistoryPanel } from "../components/workspace/VCSHistoryPanel";
 import { SearchPanel } from "../components/workspace/SearchPanel";
 import { ProjectSettingsPanel } from "../components/workspace/ProjectSettingsPanel";
 import { CodeEditor } from "../components/workspace/CodeEditor";
 import { DiffViewer } from "../components/workspace/DiffViewer";
-import { BottomPanel } from "../components/workspace/BottomPanel";
 import { StatusBar } from "../components/workspace/StatusBar";
-import { GitHubRemoteModal } from "../components/workspace/GitHubRemoteModal";
+import { BranchManagerModal } from "../components/workspace/BranchManagerModal";
 import { CommitDetailsModal } from "../components/workspace/CommitDetailsModal";
+import { UnsavedChangesModal } from "../components/workspace/UnsavedChangesModal";
+import { vcsService } from "../services/vcsService";
 
 export default function ProjectView() {
   const { id } = useParams<{ id: string }>();
   const { showError, showSuccess } = useAlert();
+  const { isDark } = useTheme();
 
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
@@ -40,9 +44,15 @@ export default function ProjectView() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Unsaved changes confirmation states
+  const [closeTabPending, setCloseTabPending] = useState<string | null>(null);
+  const [commitPending, setCommitPending] = useState<{
+    message: string;
+    stagedOnly: boolean;
+  } | null>(null);
+
   const [activeActivityTab, setActiveActivityTab] =
     useState<ActivityBarTab>("explorer");
-  const [isBottomPanelOpen, setIsBottomPanelOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const [changedFiles, setChangedFiles] = useState<
@@ -53,7 +63,7 @@ export default function ProjectView() {
     }[]
   >([]);
 
-  const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
+  const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
   const [selectedCommit, setSelectedCommit] = useState<GitCommit | null>(null);
   const [diffTarget, setDiffTarget] = useState<{
     filename: string;
@@ -62,8 +72,6 @@ export default function ProjectView() {
     modifiedContent?: string;
     fileId?: string;
   } | null>(null);
-
-  const [isSyncing, setIsSyncing] = useState(false);
 
   const loadWorkspace = useCallback(async () => {
     if (!id) return;
@@ -98,40 +106,130 @@ export default function ProjectView() {
         (f) =>
           f.type === "file" &&
           (f.name.endsWith(".tsx") ||
-            f.name.endsWith(".ts") ||
             f.name.endsWith(".jsx") ||
+            f.name.endsWith(".ts") ||
             f.name.endsWith(".js") ||
             f.name.endsWith(".py") ||
             f.name.endsWith(".html") ||
-            f.name.endsWith(".json") ||
-            f.name.endsWith(".md"))
-      );
+            f.name.endsWith(".json"))
+      ) || files.find((f) => f.type === "file");
 
-      const target = firstCodeFile || files.find((f) => f.type === "file");
-      if (target) {
-        handleSelectFile(target);
+      if (firstCodeFile) {
+        setTabs([
+          {
+            fileId: firstCodeFile._id,
+            name: firstCodeFile.name,
+            path: firstCodeFile.path,
+            language: firstCodeFile.language,
+            content: firstCodeFile.content || "",
+            initialContent: firstCodeFile.content || "",
+            isDirty: false,
+          },
+        ]);
+        setActiveTabId(firstCodeFile._id);
       }
     }
   }, [files]);
 
+  // Source Control changes: compare current files (and active tab edits) against the latest VCS commit
+  useEffect(() => {
+    const lastCommit = commits && commits.length > 0 ? commits[0] : null;
+    const lastSnapshot = lastCommit?.filesSnapshot || [];
+    const snapshotMap = new Map<string, { path: string; name: string; content: string }>(
+      lastSnapshot.map((s) => [s.path || s.name, s])
+    );
+
+    const changes: {
+      file: WorkspaceFile;
+      status: "modified" | "added" | "deleted";
+      staged: boolean;
+    }[] = [];
+
+    // Map open tab contents over files
+    const currentFiles = files.map((f) => {
+      const openTab = tabs.find((t) => t.fileId === f._id);
+      return openTab ? { ...f, content: openTab.content } : f;
+    });
+
+    if (!lastCommit) {
+      // If there are no commits yet, track files modified or created in workspace
+      currentFiles.forEach((curr) => {
+        if (curr.type === "directory") return;
+        const openTab = tabs.find((t) => t.fileId === curr._id);
+        const isModified = openTab ? openTab.isDirty : false;
+        changes.push({
+          file: curr,
+          status: isModified ? "modified" : "added",
+          staged: false,
+        });
+      });
+    } else {
+      // Check modified & added against last VCS commit
+      currentFiles.forEach((curr) => {
+        if (curr.type === "directory") return;
+        const snap = snapshotMap.get(curr.path || curr.name);
+
+        if (!snap) {
+          changes.push({
+            file: curr,
+            status: "added",
+            staged: false,
+          });
+        } else if (snap.content !== curr.content) {
+          changes.push({
+            file: curr,
+            status: "modified",
+            staged: false,
+          });
+        }
+      });
+
+      // Check deleted
+      lastSnapshot.forEach((snap) => {
+        if (snap.type === "directory") return;
+        const exists = currentFiles.some((f) => (f.path || f.name) === (snap.path || snap.name));
+        if (!exists) {
+          changes.push({
+            file: {
+              _id: `deleted-${snap.path || snap.name}`,
+              projectId: id || "",
+              name: snap.name,
+              path: snap.path,
+              type: "file",
+              content: snap.content,
+              language: snap.language || "text",
+              size: snap.size || 0,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            status: "deleted",
+            staged: false,
+          });
+        }
+      });
+    }
+
+    setChangedFiles((prev) => {
+      const stagedSet = new Set(prev.filter((p) => p.staged).map((p) => p.file._id));
+      return changes.map((c) => ({
+        ...c,
+        staged: stagedSet.has(c.file._id),
+      }));
+    });
+  }, [tabs, files, commits, id]);
+
   const handleSelectFile = (file: WorkspaceFile) => {
     if (file.type === "directory") return;
 
-    setDiffTarget(null);
-
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setIsMobileSidebarOpen(false);
-    }
-
-    const existingTab = tabs.find((t) => t.fileId === file._id);
-    if (existingTab) {
+    const existing = tabs.find((t) => t.fileId === file._id);
+    if (existing) {
       setActiveTabId(file._id);
     } else {
       const newTab: EditorTab = {
         fileId: file._id,
         name: file.name,
         path: file.path,
-        language: file.language || "code",
+        language: file.language,
         content: file.content || "",
         initialContent: file.content || "",
         isDirty: false,
@@ -139,70 +237,71 @@ export default function ProjectView() {
       setTabs((prev) => [...prev, newTab]);
       setActiveTabId(file._id);
     }
+
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsMobileSidebarOpen(false);
+    }
+  };
+
+  const executeCloseTab = (fileId: string) => {
+    const nextTabs = tabs.filter((t) => t.fileId !== fileId);
+    setTabs(nextTabs);
+
+    if (activeTabId === fileId) {
+      if (nextTabs.length > 0) {
+        setActiveTabId(nextTabs[nextTabs.length - 1].fileId);
+      } else {
+        setActiveTabId(null);
+      }
+    }
   };
 
   const handleCloseTab = (fileId: string) => {
-    setTabs((prev) => {
-      const nextTabs = prev.filter((t) => t.fileId !== fileId);
-      if (activeTabId === fileId) {
-        setActiveTabId(
-          nextTabs.length > 0 ? nextTabs[nextTabs.length - 1].fileId : null
-        );
-      }
-      return nextTabs;
-    });
+    const targetTab = tabs.find((t) => t.fileId === fileId);
+    if (targetTab && targetTab.isDirty) {
+      setCloseTabPending(fileId);
+      return;
+    }
+    executeCloseTab(fileId);
+  };
+
+  const handleModalSaveAndClose = async () => {
+    if (!closeTabPending) return;
+    const fileId = closeTabPending;
+    await handleSaveFile(fileId);
+    executeCloseTab(fileId);
+    setCloseTabPending(null);
+  };
+
+  const handleModalDontSaveAndClose = () => {
+    if (!closeTabPending) return;
+    const fileId = closeTabPending;
+    const originalFile = files.find((f) => f._id === fileId);
+    if (originalFile) {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.fileId === fileId
+            ? { ...t, content: originalFile.content || "", isDirty: false }
+            : t
+        )
+      );
+    }
+    executeCloseTab(fileId);
+    setCloseTabPending(null);
   };
 
   const handleContentChange = (fileId: string, newContent: string) => {
     setTabs((prev) =>
-      prev.map((tab) => {
-        if (tab.fileId === fileId) {
-          const isDirty = newContent !== tab.initialContent;
-          return {
-            ...tab,
-            content: newContent,
-            isDirty,
-          };
-        }
-        return tab;
-      })
+      prev.map((t) =>
+        t.fileId === fileId
+          ? {
+              ...t,
+              content: newContent,
+              isDirty: newContent !== t.initialContent,
+            }
+          : t
+      )
     );
-
-    const targetFile = files.find((f) => f._id === fileId);
-    if (targetFile) {
-      setChangedFiles((prev) => {
-        const existing = prev.find((c) => c.file._id === fileId);
-        const originalContent =
-          tabs.find((t) => t.fileId === fileId)?.initialContent ??
-          targetFile.content;
-        const hasChanged = newContent !== originalContent;
-
-        if (!hasChanged) {
-          return prev.filter((c) => c.file._id !== fileId);
-        }
-
-        if (existing) {
-          return prev.map((c) =>
-            c.file._id === fileId
-              ? {
-                  ...c,
-                  file: { ...c.file, content: newContent },
-                  status: "modified",
-                }
-              : c
-          );
-        } else {
-          return [
-            ...prev,
-            {
-              file: { ...targetFile, content: newContent },
-              status: "modified",
-              staged: false,
-            },
-          ];
-        }
-      });
-    }
   };
 
   const handleSaveFile = async (fileId: string) => {
@@ -229,16 +328,18 @@ export default function ProjectView() {
       setTabs((prev) =>
         prev.map((t) =>
           t.fileId === fileId
-            ? { ...t, initialContent: tab.content, isDirty: false }
+            ? { ...t, initialContent: t.content, isDirty: false }
             : t
         )
       );
 
       setFiles((prev) =>
-        prev.map((f) => (f._id === fileId ? { ...f, content: tab.content } : f))
+        prev.map((f) =>
+          f._id === fileId ? { ...f, content: tab.content } : f
+        )
       );
 
-      showSuccess(`Saved ${tab.name}`);
+      showSuccess(`Saved "${tab.name}"`);
     } catch (err: any) {
       showError(err.message || "Failed to save file");
     } finally {
@@ -252,12 +353,7 @@ export default function ProjectView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          name,
-          path,
-          type: "file",
-          content: "",
-        }),
+        body: JSON.stringify({ name, path, type: "file", content: "" }),
       });
 
       const data = await res.json();
@@ -265,20 +361,9 @@ export default function ProjectView() {
         throw new Error(data.message || "Failed to create file");
       }
 
-      const newFile = data.file;
-      setFiles((prev) => [...prev, newFile]);
-
-      setChangedFiles((prev) => [
-        ...prev,
-        {
-          file: newFile,
-          status: "added",
-          staged: true,
-        },
-      ]);
-
-      handleSelectFile(newFile);
-      showSuccess(`Created file ${name}`);
+      setFiles((prev) => [...prev, data.file]);
+      handleSelectFile(data.file);
+      showSuccess(`Created "${name}"`);
     } catch (err: any) {
       showError(err.message || "Failed to create file");
     }
@@ -290,93 +375,18 @@ export default function ProjectView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          name,
-          path,
-          type: "directory",
-        }),
+        body: JSON.stringify({ name, path, type: "directory" }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Failed to create directory");
+        throw new Error(data.message || "Failed to create folder");
       }
 
       setFiles((prev) => [...prev, data.file]);
-      showSuccess(`Created folder ${name}`);
+      showSuccess(`Created folder "${name}"`);
     } catch (err: any) {
-      showError(err.message || "Failed to create directory");
-    }
-  };
-
-  const handleUploadFiles = async (
-    uploaded: { name: string; path: string; content: string }[]
-  ) => {
-    try {
-      for (const item of uploaded) {
-        const res = await fetch(`${API_URL}/api/projects/${id}/files`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            name: item.name,
-            path: item.path,
-            type: "file",
-            content: item.content,
-          }),
-        });
-        const data = await res.json();
-        if (res.ok && data.file) {
-          setFiles((prev) => [...prev, data.file]);
-        }
-      }
-      showSuccess(`Uploaded ${uploaded.length} files into workspace`);
-    } catch (err: any) {
-      showError(err.message || "Failed to upload files");
-    }
-  };
-
-  const handleDownloadFile = (file: WorkspaceFile) => {
-    const blob = new Blob([file.content || ""], {
-      type: "text/plain;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = file.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleDownloadZip = async () => {
-    if (!project || files.length === 0) return;
-
-    try {
-      const zip = new JSZip();
-
-      files.forEach((f) => {
-        if (f.type === "file") {
-          const cleanPath = f.path.startsWith("/") ? f.path.slice(1) : f.path;
-          zip.file(cleanPath, f.content || "");
-        }
-      });
-
-      const blob = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const cleanProjectName = project.name.toLowerCase().replace(/\s+/g, "-");
-      link.href = url;
-      link.download = `${cleanProjectName}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      showSuccess(`Exported ${project.name} as ZIP archive`);
-    } catch (err: any) {
-      showError(err.message || "Failed to export ZIP");
+      showError(err.message || "Failed to create folder");
     }
   };
 
@@ -394,16 +404,16 @@ export default function ProjectView() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Failed to rename file");
+        throw new Error(data.message || "Failed to rename");
       }
 
-      setFiles((prev) =>
-        prev.map((f) =>
-          f._id === fileId
-            ? { ...f, name: data.file.name, path: data.file.path }
-            : f
-        )
-      );
+      if (data.files) {
+        setFiles(data.files);
+      } else {
+        setFiles((prev) =>
+          prev.map((f) => (f._id === fileId ? data.file : f))
+        );
+      }
 
       setTabs((prev) =>
         prev.map((t) =>
@@ -413,18 +423,13 @@ export default function ProjectView() {
         )
       );
 
-      showSuccess(`Renamed to ${newName}`);
+      showSuccess(`Renamed to "${newName}"`);
     } catch (err: any) {
-      showError(err.message || "Failed to rename file");
+      showError(err.message || "Failed to rename");
     }
   };
 
   const handleDeleteFile = async (fileId: string) => {
-    const file = files.find((f) => f._id === fileId);
-    if (!file) return;
-
-    if (!window.confirm(`Delete ${file.name}?`)) return;
-
     try {
       const res = await fetch(
         `${API_URL}/api/projects/${id}/files/${fileId}`,
@@ -434,18 +439,70 @@ export default function ProjectView() {
         }
       );
 
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.message || "Failed to delete");
       }
 
-      setFiles((prev) => prev.filter((f) => f._id !== fileId));
       handleCloseTab(fileId);
-      setChangedFiles((prev) => prev.filter((c) => c.file._id !== fileId));
-
-      showSuccess(`Deleted ${file.name}`);
+      setFiles((prev) => prev.filter((f) => f._id !== fileId));
+      showSuccess("Deleted successfully");
     } catch (err: any) {
       showError(err.message || "Failed to delete");
+    }
+  };
+
+  const handleUploadFiles = async (
+    uploadedFiles: { name: string; path: string; content: string; type?: "file" | "directory" }[]
+  ) => {
+    try {
+      for (const item of uploadedFiles) {
+        if (!item.type || item.type === "file") {
+          await handleCreateFile(item.name, item.path);
+        }
+      }
+      loadWorkspace();
+      showSuccess(`Uploaded ${uploadedFiles.length} files`);
+    } catch (err: any) {
+      showError(err.message || "Upload failed");
+    }
+  };
+
+  const handleDownloadFile = (file: WorkspaceFile) => {
+    const blob = new Blob([file.content || ""], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadZip = async () => {
+    try {
+      const zip = new JSZip();
+      files
+        .filter((f) => f.type === "file")
+        .forEach((f) => {
+          const cleanPath = f.path.startsWith("/") ? f.path.slice(1) : f.path;
+          zip.file(cleanPath, f.content || "");
+        });
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${project?.name || "workspace"}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showSuccess("Workspace downloaded as ZIP archive");
+    } catch (err: any) {
+      showError(err.message || "Failed to export ZIP");
     }
   };
 
@@ -469,97 +526,69 @@ export default function ProjectView() {
     setChangedFiles((prev) => prev.map((c) => ({ ...c, staged: false })));
   };
 
-  const handleDiscardChange = (fileId: string) => {
-    const orig = files.find((f) => f._id === fileId);
-    if (!orig) return;
+  const handleDiscardChange = async (fileId: string) => {
+    const file = files.find((f) => f._id === fileId);
+    if (!file) return;
+
+    const lastCommit = commits && commits.length > 0 ? commits[0] : null;
+    const snap = lastCommit?.filesSnapshot?.find(
+      (s: any) => (s.path || s.name) === (file.path || file.name)
+    );
+    const revertContent = snap ? snap.content : "";
 
     setTabs((prev) =>
       prev.map((t) =>
         t.fileId === fileId
-          ? { ...t, content: orig.content, isDirty: false }
+          ? { ...t, content: revertContent, initialContent: revertContent, isDirty: false }
           : t
       )
     );
 
-    setChangedFiles((prev) => prev.filter((c) => c.file._id !== fileId));
-    showSuccess(`Discarded changes in ${orig.name}`);
-  };
-
-  const handleDiscardAllChanges = () => {
-    if (!window.confirm("Discard all uncommitted changes across the workspace?")) {
-      return;
+    try {
+      await fetch(`${API_URL}/api/projects/${id}/files/${fileId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ content: revertContent }),
+      });
+      setFiles((prev) =>
+        prev.map((f) => (f._id === fileId ? { ...f, content: revertContent } : f))
+      );
+      showSuccess(`Discarded changes for "${file.name}"`);
+    } catch (err: any) {
+      showError(err.message || "Failed to discard changes");
     }
-
-    setTabs((prev) =>
-      prev.map((t) => {
-        const orig = files.find((f) => f._id === t.fileId);
-        return {
-          ...t,
-          content: orig?.content || t.initialContent,
-          isDirty: false,
-        };
-      })
-    );
-
-    setChangedFiles([]);
-    showSuccess("Workspace reverted to clean working tree");
   };
 
   const handleInspectDiff = (file: WorkspaceFile) => {
     const tab = tabs.find((t) => t.fileId === file._id);
-    const modifiedContent = tab ? tab.content : file.content;
-    const orig = files.find((f) => f._id === file._id);
+    const lastCommit = commits && commits.length > 0 ? commits[0] : null;
+    const snap = lastCommit?.filesSnapshot?.find(
+      (s: any) => (s.path || s.name) === (file.path || file.name)
+    );
+    const original = snap ? snap.content : files.find((f) => f._id === file._id)?.content || "";
+    const modified = tab ? tab.content : file.content || "";
 
     setDiffTarget({
       filename: file.name,
       filepath: file.path,
-      originalContent: orig?.content || "",
-      modifiedContent: modifiedContent || "",
+      originalContent: original,
+      modifiedContent: modified,
       fileId: file._id,
     });
   };
 
-  const handleCommit = async (message: string, stagedOnly: boolean) => {
-    if (!message.trim()) return;
-
-    const filesToCommit = stagedOnly
-      ? changedFiles.filter((c) => c.staged)
-      : changedFiles;
-
-    if (filesToCommit.length === 0) {
-      showError("No changes to commit");
-      return;
-    }
-
+  const executeCommit = async (message: string, stagedOnly: boolean) => {
+    if (!id) return;
     try {
-      const changesPayload = filesToCommit.map((c) => ({
-        path: c.file.path,
-        status: c.status,
-        content: c.file.content,
-      }));
+      const newCommit = await vcsService.createCommit(id, message);
+      setCommits((prev) => [newCommit, ...prev]);
 
-      const res = await fetch(
-        `${API_URL}/api/projects/${id}/git/commit`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            message,
-            branch: currentBranch,
-            changes: changesPayload,
-          }),
-        }
+      const committedIds = new Set(
+        stagedOnly
+          ? changedFiles.filter((c) => c.staged).map((c) => c.file._id)
+          : changedFiles.map((c) => c.file._id)
       );
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to commit");
-      }
-
-      setCommits((prev) => [data.commit, ...prev]);
-
-      const committedIds = new Set(filesToCommit.map((c) => c.file._id));
 
       setChangedFiles((prev) =>
         prev.filter((c) => !committedIds.has(c.file._id))
@@ -579,102 +608,66 @@ export default function ProjectView() {
     }
   };
 
-  const handleSwitchBranch = async (branchName: string, createNew = false) => {
-    try {
-      const res = await fetch(
-        `${API_URL}/api/projects/${id}/git/branches`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ branchName, createNew }),
-        }
-      );
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to switch branch");
-      }
-
-      setCurrentBranch(data.currentBranch);
-      setBranches(data.branches);
-      showSuccess(`Switched to branch "${data.currentBranch}"`);
-    } catch (err: any) {
-      showError(err.message || "Failed to switch branch");
+  const handleCommit = async (message: string, stagedOnly: boolean) => {
+    const dirtyTabs = tabs.filter((t) => t.isDirty);
+    if (dirtyTabs.length > 0) {
+      setCommitPending({ message, stagedOnly });
+      return;
     }
+    await executeCommit(message, stagedOnly);
   };
 
-  const handleLinkRepo = async (repoUrl: string) => {
-    const res = await fetch(
-      `${API_URL}/api/projects/${id}/git/link-github`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ repoUrl }),
-      }
-    );
-
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || "Failed to link GitHub repo");
+  const handleModalSaveAllAndCommit = async () => {
+    if (!commitPending) return;
+    const dirtyTabs = tabs.filter((t) => t.isDirty);
+    for (const tab of dirtyTabs) {
+      await handleSaveFile(tab.fileId);
     }
-
-    setProject(data.project);
-    loadWorkspace();
+    const { message, stagedOnly } = commitPending;
+    setCommitPending(null);
+    await executeCommit(message, stagedOnly);
   };
 
-  const handlePublishRepo = async (
-    name: string,
-    description: string,
-    isPrivate: boolean
+  const handleModalCommitWithoutSaving = async () => {
+    if (!commitPending) return;
+    const { message, stagedOnly } = commitPending;
+    setCommitPending(null);
+    await executeCommit(message, stagedOnly);
+  };
+
+  const handleBranchSwitched = (
+    newBranch: string,
+    newBranches: string[],
+    newFiles: WorkspaceFile[]
   ) => {
-    const res = await fetch(
-      `${API_URL}/api/projects/${id}/git/publish-github`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name, description, isPrivate }),
-      }
-    );
-
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || "Failed to publish GitHub repo");
-    }
-
-    setProject(data.project);
-    loadWorkspace();
+    setCurrentBranch(newBranch);
+    setBranches(newBranches);
+    setFiles(newFiles);
+    setTabs([]);
+    setActiveTabId(null);
+    setChangedFiles([]);
+    setDiffTarget(null);
+    showSuccess(`Switched workspace to branch "${newBranch}"`);
   };
 
-  const handleSyncGitHub = async () => {
-    try {
-      setIsSyncing(true);
-      const res = await fetch(
-        `${API_URL}/api/projects/${id}/git/sync`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ branch: currentBranch }),
-        }
-      );
+  const handleMergeComplete = (mergeCommit: GitCommit, newFiles: WorkspaceFile[]) => {
+    setCommits((prev) => [mergeCommit, ...prev]);
+    setFiles(newFiles);
+    setTabs([]);
+    setActiveTabId(null);
+    setChangedFiles([]);
+    setDiffTarget(null);
+    showSuccess(`Branch merge complete! Created merge commit ${mergeCommit.sha.substring(0, 7)}`);
+  };
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to sync with GitHub");
-      }
-
-      showSuccess(data.message || "Synced with GitHub remote repository");
-      if (data.files) setFiles(data.files);
-      if (data.commits) setCommits(data.commits);
-      loadWorkspace();
-    } catch (err: any) {
-      showError(err.message || "Failed to sync with GitHub");
-    } finally {
-      setIsSyncing(false);
-    }
+  const handleRollbackComplete = (newFiles: WorkspaceFile[], newCommit: GitCommit) => {
+    setFiles(newFiles);
+    setCommits((prev) => [newCommit, ...prev]);
+    setTabs([]);
+    setActiveTabId(null);
+    setChangedFiles([]);
+    setDiffTarget(null);
+    showSuccess("Time-travel rollback complete! Workspace restored to commit snapshot.");
   };
 
   const isAnyTabDirty = tabs.some((t) => t.isDirty);
@@ -682,7 +675,9 @@ export default function ProjectView() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center transition-colors duration-150 ${
+        isDark ? "bg-black text-white" : "bg-white text-black"
+      }`}>
         <LoadingSpinner text="Initializing CloudForge workspace..." fullScreen />
       </div>
     );
@@ -690,22 +685,17 @@ export default function ProjectView() {
 
   if (!project) return null;
 
-  const isGitHubConnected = Boolean(
-    project.source?.type === "github" || project.gitRemote?.connected
-  );
-
   return (
-    <div className="h-screen w-screen flex flex-col bg-slate-50 text-slate-900 overflow-hidden font-sans select-none relative">
+    <div className={`h-screen w-screen flex flex-col overflow-hidden font-sans select-none relative transition-colors duration-150 ${
+      isDark ? "bg-black text-white" : "bg-white text-black"
+    }`}>
       <WorkspaceNavbar
         project={project}
         isDirty={isAnyTabDirty || changedFiles.length > 0}
         isSaving={isSaving}
         filesCount={files.filter((f) => f.type === "file").length}
         commitsCount={commits.length}
-        onOpenGitHubModal={() => setIsGitHubModalOpen(true)}
-        onSyncGitHub={handleSyncGitHub}
         onDownloadZip={handleDownloadZip}
-        isSyncing={isSyncing}
         onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
         isMobileSidebarOpen={isMobileSidebarOpen}
       />
@@ -714,12 +704,14 @@ export default function ProjectView() {
         {isMobileSidebarOpen && (
           <div
             onClick={() => setIsMobileSidebarOpen(false)}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-30 md:hidden animate-in fade-in"
+            className="fixed inset-0 bg-black/80 backdrop-blur-xs z-30 md:hidden animate-in fade-in"
           />
         )}
 
         <div
-          className={`fixed md:relative top-13 sm:top-14 md:top-0 bottom-6 md:bottom-0 left-0 z-40 md:z-auto flex h-[calc(100vh-theme(spacing.13)-theme(spacing.6))] sm:h-[calc(100vh-theme(spacing.14)-theme(spacing.6))] md:h-full bg-white shadow-2xl md:shadow-none transition-transform duration-200 ease-in-out shrink-0 ${
+          className={`fixed md:relative top-13 sm:top-14 md:top-0 bottom-6 md:bottom-0 left-0 z-40 md:z-auto flex h-[calc(100vh-theme(spacing.13)-theme(spacing.6))] sm:h-[calc(100vh-theme(spacing.14)-theme(spacing.6))] md:h-full shadow-2xl md:shadow-none transition-all duration-200 ease-in-out shrink-0 ${
+            isDark ? "bg-black border-neutral-800" : "bg-white border-neutral-200"
+          } ${
             isMobileSidebarOpen
               ? "translate-x-0"
               : "-translate-x-full md:translate-x-0"
@@ -727,18 +719,14 @@ export default function ProjectView() {
         >
           <ActivityBar
             activeTab={activeActivityTab}
-            onChangeTab={(tab) => {
-              if (tab === "github") {
-                setIsGitHubModalOpen(true);
-              } else {
-                setActiveActivityTab(tab);
-              }
-            }}
+            onChangeTab={(tab) => setActiveActivityTab(tab)}
             changedFilesCount={changedFiles.length}
-            isGitHubConnected={isGitHubConnected}
+            commitsCount={commits.length}
           />
 
-          <div className="w-64 sm:w-72 md:w-80 h-full border-r border-slate-200 bg-slate-50/70 shrink-0 overflow-hidden flex flex-col">
+          <div className={`w-64 sm:w-72 md:w-80 h-full border-r shrink-0 overflow-hidden flex flex-col transition-colors duration-150 ${
+            isDark ? "border-neutral-800 bg-neutral-950" : "border-neutral-200 bg-neutral-50"
+          }`}>
             {activeActivityTab === "explorer" && (
               <FileExplorer
                 files={files}
@@ -759,7 +747,6 @@ export default function ProjectView() {
               <SourceControlPanel
                 project={project}
                 changedFiles={changedFiles}
-                commits={commits}
                 currentBranch={currentBranch}
                 branches={branches}
                 onCommit={handleCommit}
@@ -768,13 +755,18 @@ export default function ProjectView() {
                 onStageAll={handleStageAll}
                 onUnstageAll={handleUnstageAll}
                 onDiscardChange={handleDiscardChange}
-                onDiscardAllChanges={handleDiscardAllChanges}
-                onSelectCommit={(commit) => setSelectedCommit(commit)}
                 onInspectDiff={handleInspectDiff}
-                onSwitchBranch={handleSwitchBranch}
-                onOpenGitHubModal={() => setIsGitHubModalOpen(true)}
-                onSyncGitHub={handleSyncGitHub}
-                isSyncing={isSyncing}
+                onOpenBranchManager={() => setIsBranchModalOpen(true)}
+              />
+            )}
+
+            {activeActivityTab === "history" && (
+              <VCSHistoryPanel
+                projectId={project._id}
+                commits={commits}
+                currentBranch={currentBranch}
+                onCommitSelected={(c) => setSelectedCommit(c)}
+                onRollbackComplete={handleRollbackComplete}
               />
             )}
 
@@ -800,13 +792,14 @@ export default function ProjectView() {
                   setChangedFiles([]);
                   setDiffTarget(null);
                 }}
-                onOpenGitHubModal={() => setIsGitHubModalOpen(true)}
               />
             )}
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col h-full overflow-hidden bg-white min-w-0">
+        <div className={`flex-1 flex flex-col h-full overflow-hidden min-w-0 transition-colors duration-150 ${
+          isDark ? "bg-black" : "bg-white"
+        }`}>
           <div className="flex-1 overflow-hidden">
             {diffTarget ? (
               <DiffViewer
@@ -833,47 +826,57 @@ export default function ProjectView() {
               />
             )}
           </div>
-
-          <BottomPanel
-            isOpen={isBottomPanelOpen}
-            onClose={() => setIsBottomPanelOpen(false)}
-            currentBranch={currentBranch}
-            projectName={project.name}
-            recentCommits={commits}
-          />
         </div>
       </div>
 
       <StatusBar
         currentBranch={currentBranch}
-        isGitHubConnected={isGitHubConnected}
         changedFilesCount={changedFiles.length}
         activeLanguage={activeTab?.language || "Plain Text"}
-        isBottomPanelOpen={isBottomPanelOpen}
-        onToggleBottomPanel={() => setIsBottomPanelOpen(!isBottomPanelOpen)}
         onOpenSourceControl={() => {
           setActiveActivityTab("sourceControl");
           if (typeof window !== "undefined" && window.innerWidth < 768) {
             setIsMobileSidebarOpen(true);
           }
         }}
-        onSyncGitHub={handleSyncGitHub}
-        isSyncing={isSyncing}
       />
 
-      <GitHubRemoteModal
-        isOpen={isGitHubModalOpen}
-        onClose={() => setIsGitHubModalOpen(false)}
-        project={project}
-        onLinkRepo={handleLinkRepo}
-        onPublishRepo={handlePublishRepo}
+      <BranchManagerModal
+        isOpen={isBranchModalOpen}
+        onClose={() => setIsBranchModalOpen(false)}
+        projectId={project._id}
+        currentBranch={currentBranch}
+        branches={branches}
+        onBranchSwitched={handleBranchSwitched}
+        onMergeComplete={handleMergeComplete}
       />
 
       <CommitDetailsModal
         commit={selectedCommit}
         onClose={() => setSelectedCommit(null)}
-        repoUrl={project.source?.github?.url || project.gitRemote?.url}
       />
+
+      {closeTabPending && (
+        <UnsavedChangesModal
+          isOpen={Boolean(closeTabPending)}
+          type="close-tab"
+          fileName={tabs.find((t) => t.fileId === closeTabPending)?.name || "file"}
+          onSave={handleModalSaveAndClose}
+          onDontSave={handleModalDontSaveAndClose}
+          onCancel={() => setCloseTabPending(null)}
+        />
+      )}
+
+      {commitPending && (
+        <UnsavedChangesModal
+          isOpen={Boolean(commitPending)}
+          type="commit"
+          dirtyFileNames={tabs.filter((t) => t.isDirty).map((t) => t.name)}
+          onSaveAllAndCommit={handleModalSaveAllAndCommit}
+          onCommitWithoutSaving={handleModalCommitWithoutSaving}
+          onCancel={() => setCommitPending(null)}
+        />
+      )}
     </div>
   );
 }

@@ -34,9 +34,9 @@ export const FileIcon: React.FC<FileIconProps> = ({
 }) => {
   if (type === "directory") {
     return isOpen ? (
-      <FolderOpen className={`${className} text-amber-400 shrink-0`} />
+      <FolderOpen className={`${className} text-blue-500 shrink-0`} />
     ) : (
-      <Folder className={`${className} text-amber-400 shrink-0`} />
+      <Folder className={`${className} text-blue-500 shrink-0`} />
     );
   }
 
@@ -76,7 +76,7 @@ export const FileIcon: React.FC<FileIconProps> = ({
   }
 
   if (ext === "json") {
-    return <FileJson className={`${className} text-amber-300 shrink-0`} />;
+    return <FileJson className={`${className} text-sky-400 shrink-0`} />;
   }
 
   if (ext === "md" || ext === "markdown") {

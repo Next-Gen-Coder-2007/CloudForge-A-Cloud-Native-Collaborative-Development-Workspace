@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { FileIcon } from "./FileIcon";
 import { type WorkspaceFile, type FileTreeNode } from "../../types/workspace";
+import { useTheme } from "../../context/ThemeContext";
 
 interface FileExplorerProps {
   files: WorkspaceFile[];
@@ -44,6 +45,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   onRefreshFiles,
   projectName,
 }) => {
+  const { isDark } = useTheme();
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
     new Set()
   );
@@ -70,27 +72,35 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     });
 
     sorted.forEach((file) => {
-      const node: FileTreeNode = {
-        id: file._id,
-        name: file.name,
-        path: file.path,
-        type: file.type,
-        file: file,
-        children: file.type === "directory" ? [] : undefined,
-      };
-      map[file.path] = node;
-    });
+      const cleanPath = file.path.startsWith("/")
+        ? file.path.slice(1)
+        : file.path;
+      const parts = cleanPath.split("/").filter(Boolean);
 
-    sorted.forEach((file) => {
-      const parts = file.path.split("/").filter(Boolean);
-      if (parts.length <= 1) {
-        root.push(map[file.path]);
-      } else {
-        const parentPath = "/" + parts.slice(0, -1).join("/");
-        if (map[parentPath] && map[parentPath].children) {
-          map[parentPath].children!.push(map[file.path]);
-        } else {
-          root.push(map[file.path]);
+      let currentPath = "";
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const prevPath = currentPath;
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        const isLeaf = i === parts.length - 1;
+
+        if (!map[currentPath]) {
+          const newNode: FileTreeNode = {
+            id: isLeaf ? file._id : currentPath,
+            name: part,
+            path: `/${currentPath}`,
+            type: isLeaf ? file.type : "directory",
+            children: isLeaf && file.type === "file" ? undefined : [],
+            file: isLeaf ? file : undefined,
+          };
+          map[currentPath] = newNode;
+
+          if (prevPath && map[prevPath]) {
+            if (!map[prevPath].children) map[prevPath].children = [];
+            map[prevPath].children!.push(newNode);
+          } else {
+            root.push(newNode);
+          }
         }
       }
     });
@@ -98,49 +108,68 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     return root;
   }, [files]);
 
+  const filteredFiles = useMemo(() => {
+    if (!searchQuery.trim()) return null;
+    const q = searchQuery.toLowerCase();
+    return files.filter(
+      (f) =>
+        f.type === "file" &&
+        (f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q))
+    );
+  }, [files, searchQuery]);
+
   const toggleFolder = (path: string) => {
     setCollapsedFolders((prev) => {
       const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
-      }
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
       return next;
     });
   };
 
   const collapseAllFolders = () => {
-    const allDirs = new Set(
-      files.filter((f) => f.type === "directory").map((f) => f.path)
-    );
-    setCollapsedFolders(allDirs);
+    const allFolderPaths = new Set<string>();
+    const collectPaths = (nodes: FileTreeNode[]) => {
+      nodes.forEach((n) => {
+        if (n.type === "directory") {
+          allFolderPaths.add(n.path);
+          if (n.children) collectPaths(n.children);
+        }
+      });
+    };
+    collectPaths(fileTree);
+    setCollapsedFolders(allFolderPaths);
   };
 
-  const handleStartCreate = (
-    type: "file" | "folder",
-    parentPath: string = ""
-  ) => {
+  const handleStartCreate = (type: "file" | "folder", parentPath: string) => {
     setCreatingType(type);
     setCreatingParentPath(parentPath);
     setNewItemName("");
+    if (parentPath && collapsedFolders.has(parentPath)) {
+      toggleFolder(parentPath);
+    }
   };
 
   const handleFinishCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newItemName.trim() || !creatingType) return;
+    if (!newItemName.trim() || !creatingType) {
+      setCreatingType(null);
+      return;
+    }
 
-    const trimmed = newItemName.trim();
+    const cleanName = newItemName.trim();
     const cleanParent = creatingParentPath.endsWith("/")
-      ? creatingParentPath.slice(0, -1)
-      : creatingParentPath;
-    const finalPath = cleanParent ? `${cleanParent}/${trimmed}` : `/${trimmed}`;
+      ? creatingParentPath
+      : creatingParentPath
+      ? `${creatingParentPath}/`
+      : "/";
+    const fullPath = `${cleanParent}${cleanName}`;
 
     try {
       if (creatingType === "file") {
-        await onCreateFile(trimmed, finalPath);
+        await onCreateFile(cleanName, fullPath);
       } else {
-        await onCreateFolder(trimmed, finalPath);
+        await onCreateFolder(cleanName, fullPath);
       }
     } finally {
       setCreatingType(null);
@@ -154,79 +183,78 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   };
 
   const handleFinishRename = async (fileId: string) => {
-    if (renameValue.trim()) {
-      await onRenameFile(fileId, renameValue.trim());
+    if (!renameValue.trim() || renameValue === files.find((f) => f._id === fileId)?.name) {
+      setRenamingId(null);
+      return;
     }
-    setRenamingId(null);
-  };
 
-  const handleRefresh = async () => {
     try {
-      setIsRefreshing(true);
-      await onRefreshFiles();
+      await onRenameFile(fileId, renameValue.trim());
     } finally {
-      setIsRefreshing(false);
+      setRenamingId(null);
+      setRenameValue("");
     }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFiles = e.target.files;
-    if (!uploadedFiles || uploadedFiles.length === 0 || !onUploadFiles) return;
+    if (!e.target.files || !onUploadFiles) return;
 
-    const itemsToCreate: { name: string; path: string; content: string }[] = [];
-
-    for (let i = 0; i < uploadedFiles.length; i++) {
-      const file = uploadedFiles[i];
+    const uploadedList: { name: string; path: string; content: string }[] = [];
+    for (let i = 0; i < e.target.files.length; i++) {
+      const file = e.target.files[i];
       const text = await file.text();
-      itemsToCreate.push({
+      uploadedList.push({
         name: file.name,
         path: `/${file.name}`,
         content: text,
       });
     }
 
-    await onUploadFiles(itemsToCreate);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (uploadedList.length > 0) {
+      await onUploadFiles(uploadedList);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
-  const filteredFiles = useMemo(() => {
-    if (!searchQuery.trim()) return null;
-    const query = searchQuery.toLowerCase();
-    return files.filter(
-      (f) =>
-        f.type === "file" &&
-        (f.name.toLowerCase().includes(query) ||
-          f.path.toLowerCase().includes(query))
-    );
-  }, [files, searchQuery]);
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await onRefreshFiles();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
-  const renderNode = (node: FileTreeNode, depth = 0) => {
-    if (!node) return null;
+  const renderNode = (node: FileTreeNode, depth: number = 0) => {
     const isFolder = node.type === "directory";
     const isCollapsed = collapsedFolders.has(node.path);
     const isActive = node.file && node.file._id === activeFileId;
-    const isRenaming = node.id === renamingId;
+    const isRenaming = renamingId === node.id;
 
     return (
-      <div key={node.path} className="select-none">
+      <div key={node.id} className="select-none font-mono">
         <div
           onClick={() => {
-            if (isFolder) {
-              toggleFolder(node.path);
-            } else if (node.file) {
-              onSelectFile(node.file);
-            }
+            if (isFolder) toggleFolder(node.path);
+            else if (node.file) onSelectFile(node.file);
           }}
           style={{ paddingLeft: `${depth * 14 + 10}px` }}
           className={`group flex items-center justify-between py-1.5 pr-2 rounded-lg text-xs cursor-pointer transition-colors ${
             isActive
-              ? "bg-blue-100/70 text-blue-900 font-semibold border-l-2 border-blue-600 shadow-2xs"
-              : "text-slate-700 hover:bg-slate-200/60 hover:text-slate-900"
+              ? isDark
+                ? "bg-blue-500/20 text-blue-300 font-semibold border-l-2 border-blue-500 shadow-2xs"
+                : "bg-blue-100/70 text-blue-900 font-semibold border-l-2 border-blue-600 shadow-2xs"
+              : isDark
+              ? "text-neutral-300 hover:bg-neutral-900 hover:text-white"
+              : "text-neutral-700 hover:bg-neutral-200/60 hover:text-black"
           }`}
         >
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
             {isFolder ? (
-              <span className="text-slate-400">
+              <span className={isDark ? "text-neutral-500" : "text-neutral-400"}>
                 {isCollapsed ? (
                   <ChevronRight className="w-3.5 h-3.5" />
                 ) : (
@@ -256,7 +284,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                 }}
                 autoFocus
                 onClick={(e) => e.stopPropagation()}
-                className="px-1.5 py-0.5 bg-white border border-blue-500 rounded text-xs text-slate-900 outline-none w-full shadow-xs"
+                className={`px-1.5 py-0.5 border border-blue-500 rounded text-xs outline-none w-full shadow-xs ${
+                  isDark ? "bg-black text-white" : "bg-white text-black"
+                }`}
               />
             ) : (
               <span className="truncate">{node.name}</span>
@@ -265,7 +295,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
 
           {!isRenaming && (
             <div
-              className="hidden group-hover:flex items-center gap-1 text-slate-500"
+              className={`hidden group-hover:flex items-center gap-1 ${isDark ? "text-neutral-400" : "text-neutral-500"}`}
               onClick={(e) => e.stopPropagation()}
             >
               {isFolder && (
@@ -273,14 +303,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                   <button
                     onClick={() => handleStartCreate("file", node.path)}
                     title="New File inside folder"
-                    className="p-1 hover:text-slate-900 hover:bg-slate-200 rounded"
+                    className={`p-1 rounded ${isDark ? "hover:text-white hover:bg-neutral-800" : "hover:text-black hover:bg-neutral-200"}`}
                   >
                     <FilePlus className="w-3 h-3" />
                   </button>
                   <button
                     onClick={() => handleStartCreate("folder", node.path)}
                     title="New Folder inside folder"
-                    className="p-1 hover:text-slate-900 hover:bg-slate-200 rounded"
+                    className={`p-1 rounded ${isDark ? "hover:text-white hover:bg-neutral-800" : "hover:text-black hover:bg-neutral-200"}`}
                   >
                     <FolderPlus className="w-3 h-3" />
                   </button>
@@ -291,7 +321,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                 <button
                   onClick={() => onDownloadFile(node.file!)}
                   title="Download File"
-                  className="p-1 hover:text-slate-900 hover:bg-slate-200 rounded"
+                  className={`p-1 rounded ${isDark ? "hover:text-white hover:bg-neutral-800" : "hover:text-black hover:bg-neutral-200"}`}
                 >
                   <Download className="w-3 h-3" />
                 </button>
@@ -301,7 +331,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                 <button
                   onClick={() => handleStartRename(node.file!)}
                   title="Rename"
-                  className="p-1 hover:text-slate-900 hover:bg-slate-200 rounded"
+                  className={`p-1 rounded ${isDark ? "hover:text-white hover:bg-neutral-800" : "hover:text-black hover:bg-neutral-200"}`}
                 >
                   <Edit2 className="w-3 h-3" />
                 </button>
@@ -310,7 +340,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               <button
                 onClick={() => onDeleteFile(node.id)}
                 title="Delete"
-                className="p-1 hover:text-red-600 hover:bg-red-50 rounded"
+                className={`p-1 rounded ${isDark ? "hover:text-rose-400 hover:bg-rose-500/10" : "hover:text-rose-600 hover:bg-rose-50"}`}
               >
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -329,7 +359,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                 <FileIcon
                   name={newItemName || "untitled"}
                   type={creatingType === "folder" ? "directory" : "file"}
-                  className="w-3.5 h-3.5 text-blue-600"
+                  className="w-3.5 h-3.5 text-blue-500"
                 />
                 <input
                   type="text"
@@ -343,7 +373,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                   onKeyDown={(e) => {
                     if (e.key === "Escape") setCreatingType(null);
                   }}
-                  className="px-1.5 py-0.5 bg-white border border-blue-500 rounded text-xs text-slate-900 outline-none w-full shadow-xs"
+                  className={`px-1.5 py-0.5 border border-blue-500 rounded text-xs outline-none w-full shadow-xs ${
+                    isDark ? "bg-black text-white" : "bg-white text-black"
+                  }`}
                 />
               </form>
             )}
@@ -357,7 +389,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-50/70 text-slate-700 select-none overflow-hidden border-r border-slate-200">
+    <div className={`h-full flex flex-col select-none overflow-hidden border-r transition-colors duration-150 ${
+      isDark ? "bg-neutral-950 text-neutral-300 border-neutral-800" : "bg-white text-neutral-700 border-neutral-200"
+    }`}>
       <input
         ref={fileInputRef}
         type="file"
@@ -366,22 +400,28 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         className="hidden"
       />
 
-      <div className="px-3 py-2.5 flex items-center justify-between border-b border-slate-200 bg-white/60">
-        <span className="text-[11px] font-bold tracking-wider uppercase text-slate-500">
+      <div className={`px-3 py-2.5 flex items-center justify-between border-b ${
+        isDark ? "bg-neutral-950 border-neutral-800" : "bg-neutral-50/70 border-neutral-200"
+      }`}>
+        <span className={`text-[11px] font-bold tracking-wider uppercase ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
           Explorer
         </span>
 
         <div className="flex items-center gap-1">
           <button
             onClick={() => handleStartCreate("file", "")}
-            className="p-1 hover:bg-slate-200/80 text-slate-500 hover:text-slate-900 rounded transition-colors"
+            className={`p-1 rounded transition-colors cursor-pointer ${
+              isDark ? "text-neutral-400 hover:text-white hover:bg-neutral-800" : "text-neutral-500 hover:text-black hover:bg-neutral-200"
+            }`}
             title="New File at root"
           >
             <FilePlus className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => handleStartCreate("folder", "")}
-            className="p-1 hover:bg-slate-200/80 text-slate-500 hover:text-slate-900 rounded transition-colors"
+            className={`p-1 rounded transition-colors cursor-pointer ${
+              isDark ? "text-neutral-400 hover:text-white hover:bg-neutral-800" : "text-neutral-500 hover:text-black hover:bg-neutral-200"
+            }`}
             title="New Folder at root"
           >
             <FolderPlus className="w-3.5 h-3.5" />
@@ -389,7 +429,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           {onUploadFiles && (
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="p-1 hover:bg-slate-200/80 text-slate-500 hover:text-slate-900 rounded transition-colors"
+              className={`p-1 rounded transition-colors cursor-pointer ${
+                isDark ? "text-neutral-400 hover:text-white hover:bg-neutral-800" : "text-neutral-500 hover:text-black hover:bg-neutral-200"
+              }`}
               title="Upload Local Files into Project"
             >
               <Upload className="w-3.5 h-3.5" />
@@ -397,16 +439,20 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           )}
           <button
             onClick={handleRefresh}
-            className="p-1 hover:bg-slate-200/80 text-slate-500 hover:text-slate-900 rounded transition-colors"
+            className={`p-1 rounded transition-colors cursor-pointer ${
+              isDark ? "text-neutral-400 hover:text-white hover:bg-neutral-800" : "text-neutral-500 hover:text-black hover:bg-neutral-200"
+            }`}
             title="Refresh Explorer"
           >
             <RefreshCw
-              className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-blue-600" : ""}`}
+              className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-blue-500" : ""}`}
             />
           </button>
           <button
             onClick={collapseAllFolders}
-            className="p-1 hover:bg-slate-200/80 text-slate-500 hover:text-slate-900 rounded transition-colors"
+            className={`p-1 rounded transition-colors cursor-pointer ${
+              isDark ? "text-neutral-400 hover:text-white hover:bg-neutral-800" : "text-neutral-500 hover:text-black hover:bg-neutral-200"
+            }`}
             title="Collapse All Folders"
           >
             <FolderMinus className="w-3.5 h-3.5" />
@@ -414,12 +460,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         </div>
       </div>
 
-      <div className="px-3 py-1.5 flex items-center justify-between text-[11px] font-bold text-slate-600 uppercase tracking-wider bg-slate-100/60 border-b border-slate-200">
+      <div className={`px-3 py-1.5 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider border-b ${
+        isDark ? "bg-black border-neutral-800 text-neutral-300" : "bg-neutral-100/70 border-neutral-200 text-neutral-700"
+      }`}>
         <span className="truncate">{projectName}</span>
         <button
           onClick={() => setShowSearch(!showSearch)}
-          className={`p-0.5 rounded hover:text-slate-900 ${
-            showSearch ? "text-blue-600" : "text-slate-400"
+          className={`p-0.5 rounded cursor-pointer ${
+            showSearch ? "text-blue-500" : isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"
           }`}
           title="Filter files"
         >
@@ -428,18 +476,22 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       </div>
 
       {showSearch && (
-        <div className="p-2 border-b border-slate-200 bg-white flex items-center gap-1.5">
+        <div className={`p-2 border-b flex items-center gap-1.5 ${
+          isDark ? "bg-neutral-900 border-neutral-800" : "bg-white border-neutral-200"
+        }`}>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Filter files by name..."
-            className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-900 outline-none focus:border-blue-500 focus:bg-white"
+            className={`w-full px-2 py-1 border rounded text-xs outline-none focus:border-blue-500 ${
+              isDark ? "bg-black border-neutral-700 text-white placeholder-neutral-500" : "bg-neutral-50 border-neutral-200 text-black placeholder-neutral-400"
+            }`}
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="p-1 text-slate-400 hover:text-slate-700"
+              className="p-1 text-neutral-400 hover:text-neutral-200 cursor-pointer"
             >
               <X className="w-3 h-3" />
             </button>
@@ -450,7 +502,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5 font-mono text-xs">
         {filteredFiles ? (
           <div>
-            <p className="px-2 py-1 text-[11px] text-slate-500">
+            <p className={`px-2 py-1 text-[11px] ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
               {filteredFiles.length} matched files:
             </p>
             {filteredFiles.map((file) => (
@@ -459,14 +511,18 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                 onClick={() => onSelectFile(file)}
                 className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer ${
                   file._id === activeFileId
-                    ? "bg-blue-100 text-blue-900 font-semibold"
-                    : "hover:bg-slate-200 text-slate-800"
+                    ? isDark
+                      ? "bg-blue-500/20 text-blue-300 font-semibold"
+                      : "bg-blue-100 text-blue-900 font-semibold"
+                    : isDark
+                    ? "hover:bg-neutral-900 text-neutral-200"
+                    : "hover:bg-neutral-200 text-neutral-800"
                 }`}
               >
                 <FileIcon name={file.name} type={file.type} className="w-4 h-4 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold">{file.name}</p>
-                  <p className="truncate text-[10px] text-slate-500">{file.path}</p>
+                  <p className={`truncate text-[10px] ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{file.path}</p>
                 </div>
               </div>
             ))}
@@ -481,7 +537,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                 <FileIcon
                   name={newItemName || "untitled"}
                   type={creatingType === "folder" ? "directory" : "file"}
-                  className="w-4 h-4 text-blue-600"
+                  className="w-4 h-4 text-blue-500"
                 />
                 <input
                   type="text"
@@ -495,7 +551,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                   onKeyDown={(e) => {
                     if (e.key === "Escape") setCreatingType(null);
                   }}
-                  className="px-1.5 py-0.5 bg-white border border-blue-500 rounded text-xs text-slate-900 outline-none w-full shadow-xs"
+                  className={`px-1.5 py-0.5 border border-blue-500 rounded text-xs outline-none w-full shadow-xs ${
+                    isDark ? "bg-black text-white" : "bg-white text-black"
+                  }`}
                 />
               </form>
             )}
@@ -503,12 +561,12 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
             {fileTree.map((node) => renderNode(node, 0))}
 
             {fileTree.length === 0 && !creatingType && (
-              <div className="py-8 text-center text-slate-500 text-xs">
-                <FileCode className="w-8 h-8 mx-auto mb-2 opacity-40 text-slate-400" />
+              <div className={`py-8 text-center text-xs ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+                <FileCode className="w-8 h-8 mx-auto mb-2 opacity-40" />
                 <p>No files in workspace</p>
                 <button
                   onClick={() => handleStartCreate("file", "")}
-                  className="mt-2 text-blue-600 hover:underline font-semibold"
+                  className="mt-2 text-blue-500 hover:underline font-semibold cursor-pointer"
                 >
                   + Create first file
                 </button>

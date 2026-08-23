@@ -1,3 +1,5 @@
+export type ActivityBarTab = "explorer" | "sourceControl" | "history" | "search" | "settings";
+
 export interface WorkspaceFile {
   _id: string;
   projectId: string;
@@ -41,6 +43,14 @@ export interface GitCommit {
   };
   branch: string;
   changes?: GitCommitChange[];
+  filesSnapshot?: {
+    name: string;
+    path: string;
+    content: string;
+    language?: string;
+    type?: string;
+    size?: number;
+  }[];
   stats?: {
     total: number;
     additions: number;
@@ -60,11 +70,7 @@ export interface EditorTab {
   isDirty: boolean;
 }
 
-export type ActivityBarTab =
-  | "explorer"
-  | "sourceControl"
-  | "search"
-  | "github"
-  | "settings";
-
-export type BottomPanelTab = "terminal" | "git" | "output" | "problems";
+export interface BreadcrumbItem {
+  name: string;
+  path: string;
+}

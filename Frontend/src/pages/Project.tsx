@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API_URL from "../config/api";
 import { useAlert } from "../hooks/useAlert";
+import { useTheme } from "../context/ThemeContext";
 import Navbar from "../components/layout/Navbar";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import EmptyState from "../components/ui/EmptyState";
 import ProjectGrid from "../components/projects/ProjectGrid";
 import CreateProjectModal from "../components/projects/CreateProjectModal";
 import EditProjectModal from "../components/projects/EditProjectModal";
-import GitHubRepositoryModal from "../components/projects/GitHubRepositoryModal";
 import { type Project } from "../types/project";
 
 interface User {
@@ -19,13 +19,13 @@ interface User {
 function Projects() {
   const navigate = useNavigate();
   const { showError, showSuccess } = useAlert();
+  const { isDark } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [showGitHubImport, setShowGitHubImport] = useState(false);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -64,22 +64,6 @@ function Projects() {
     setProjects((prev) => [project, ...prev]);
   };
 
-  const handleProjectImported = (project: Project) => {
-    setProjects((prev) => {
-      const exists = prev.some(
-        (item) => item._id === project._id
-      );
-
-      if (exists) {
-        return prev.map((item) =>
-          item._id === project._id ? project : item
-        );
-      }
-
-      return [project, ...prev];
-    });
-  };
-
   const handleProjectUpdated = (updatedProject: Project) => {
     setProjects((prev) => prev.map((project) => (project._id === updatedProject._id ? updatedProject : project)));
     setEditingProject(null);
@@ -105,48 +89,49 @@ function Projects() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50">
+      <div className={`min-h-screen flex items-center justify-center transition-colors duration-150 ${
+        isDark ? "bg-black text-white" : "bg-white text-black"
+      }`}>
         <LoadingSpinner text="Loading projects..." fullScreen />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+    <div className={`min-h-screen font-sans transition-colors duration-150 ${
+      isDark ? "bg-black text-white" : "bg-white text-black"
+    }`}>
       <Navbar user={user} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <section className="mb-6 sm:mb-8">
           <button
             onClick={() => navigate("/dashboard")}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-600 transition-colors mb-3"
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold mb-3 cursor-pointer transition-colors ${
+              isDark ? "text-neutral-400 hover:text-blue-400" : "text-neutral-500 hover:text-blue-600"
+            }`}
           >
             ← Back to Dashboard
           </button>
 
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
-              <p className="text-blue-600 text-xs font-bold tracking-widest uppercase mb-1">
+              <p className="text-blue-500 text-xs font-bold tracking-widest uppercase mb-1">
                 Cloud Workspaces
               </p>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900">
+              <h1 className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight ${
+                isDark ? "text-white" : "text-black"
+              }`}>
                 Projects
               </h1>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Create, manage, and synchronize your cloud workspaces.
+              <p className={`text-xs sm:text-sm mt-1 ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
+                Create, manage, and code in workspaces with native version control.
               </p>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
               <button
-                onClick={() => setShowGitHubImport(true)}
-                className="w-full sm:w-auto px-4 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-50 transition-colors shadow-2xs text-center"
-              >
-                Import from GitHub
-              </button>
-
-              <button
                 onClick={() => setShowCreate(true)}
-                className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/20 text-center"
+                className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/20 text-center cursor-pointer"
               >
                 + New Project
               </button>
@@ -154,7 +139,9 @@ function Projects() {
           </div>
         </section>
 
-        <section className="bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-4 mb-6 shadow-2xs">
+        <section className={`border rounded-2xl p-3 sm:p-4 mb-6 shadow-2xs ${
+          isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-neutral-200"
+        }`}>
           <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
             <div className="relative flex-1">
               <input
@@ -162,10 +149,16 @@ function Projects() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search projects by name, description or template..."
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl outline-none text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50 focus:bg-white transition-all"
+                className={`w-full px-3.5 py-2.5 border rounded-xl outline-none text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                  isDark
+                    ? "bg-black border-neutral-700 text-white placeholder-neutral-500 focus:bg-black"
+                    : "bg-neutral-50 border-neutral-200 text-black placeholder-neutral-400 focus:bg-white"
+                }`}
               />
             </div>
-            <div className="flex items-center justify-center px-3.5 py-2 sm:py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-600 shrink-0">
+            <div className={`flex items-center justify-center px-3.5 py-2 sm:py-2.5 rounded-xl border text-xs font-semibold shrink-0 ${
+              isDark ? "bg-black border-neutral-800 text-neutral-300" : "bg-neutral-50 border-neutral-200 text-neutral-600"
+            }`}>
               {filteredProjects.length} {filteredProjects.length === 1 ? "Project" : "Projects"}
             </div>
           </div>
@@ -174,7 +167,7 @@ function Projects() {
         {projects.length === 0 ? (
           <EmptyState
             title="No projects yet"
-            description="Create your first CloudForge project or import one from GitHub to get started."
+            description="Create your first CloudForge project with native version control."
             buttonText="+ Create Project"
             onButtonClick={() => setShowCreate(true)}
           />
@@ -194,11 +187,6 @@ function Projects() {
 
       <CreateProjectModal isOpen={showCreate} onClose={() => setShowCreate(false)} onCreated={handleProjectCreated} />
       <EditProjectModal project={editingProject} onClose={() => setEditingProject(null)} onUpdated={handleProjectUpdated} />
-      <GitHubRepositoryModal
-        isOpen={showGitHubImport}
-        onClose={() => setShowGitHubImport(false)}
-        onImported={handleProjectImported}
-      />
     </div>
   );
 }

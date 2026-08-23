@@ -27,6 +27,18 @@ const commitChangeSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const commitFileSnapshotSchema = new mongoose.Schema(
+  {
+    path: String,
+    name: String,
+    content: String,
+    language: String,
+    type: { type: String, default: "file" },
+    size: Number,
+  },
+  { _id: false }
+);
+
 const projectCommitSchema = new mongoose.Schema(
   {
     projectId: {
@@ -39,6 +51,10 @@ const projectCommitSchema = new mongoose.Schema(
       type: String,
       required: true,
       index: true,
+    },
+    parentSha: {
+      type: String,
+      default: null,
     },
     message: {
       type: String,
@@ -65,10 +81,12 @@ const projectCommitSchema = new mongoose.Schema(
       index: true,
     },
     changes: [commitChangeSchema],
-    isGitHubCommit: {
-      type: Boolean,
-      default: false,
+    stats: {
+      total: { type: Number, default: 0 },
+      additions: { type: Number, default: 0 },
+      deletions: { type: Number, default: 0 },
     },
+    filesSnapshot: [commitFileSnapshotSchema],
   },
   {
     timestamps: true,
