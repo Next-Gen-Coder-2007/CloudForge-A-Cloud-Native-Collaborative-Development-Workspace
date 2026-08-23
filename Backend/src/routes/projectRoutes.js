@@ -12,6 +12,7 @@ import {
   getWorkspace,
   getProjectFiles,
   createProjectFile,
+  batchCreateProjectFiles,
   updateProjectFile,
   renameProjectFile,
   deleteProjectFile,
@@ -43,6 +44,8 @@ router.get("/:id/files", getProjectFiles);
 router.get("/:id/workspace/files", getProjectFiles);
 router.post("/:id/files", createProjectFile);
 router.post("/:id/workspace/files", createProjectFile);
+router.post("/:id/files/batch", batchCreateProjectFiles);
+router.post("/:id/workspace/files/batch", batchCreateProjectFiles);
 router.put("/:id/files/:fileId", updateProjectFile);
 router.put("/:id/workspace/files/:fileId", updateProjectFile);
 router.put("/:id/files/:fileId/rename", renameProjectFile);

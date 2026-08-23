@@ -11,6 +11,19 @@ export function generateCommitSha(message, author, timestamp, parentSha = "") {
   return crypto.createHash("sha256").update(seed).digest("hex").substring(0, 7);
 }
 
+const isBinaryContent = (content) => {
+  return typeof content === "string" && content.startsWith("data:");
+};
+
+const computeSize = (content) => {
+  if (!content) return 0;
+  if (isBinaryContent(content)) {
+    const b64 = content.split(",")[1] || "";
+    return Math.round((b64.length * 3) / 4);
+  }
+  return Buffer.byteLength(content, "utf8");
+};
+
 /**
  * Compute file changes / diff between previous snapshot and current files
  */
@@ -22,33 +35,46 @@ export function computeChanges(previousFiles = [], currentFiles = []) {
   // Check modified & added
   for (const [path, curr] of currMap.entries()) {
     const prev = prevMap.get(path);
+    const currIsBinary = isBinaryContent(curr.content);
+
     if (!prev) {
       changes.push({
         path,
         status: "added",
-        additions: (curr.content || "").split("\n").length,
+        additions: currIsBinary ? 1 : (curr.content || "").split("\n").length,
         deletions: 0,
       });
     } else if (prev.content !== curr.content) {
-      const prevLines = (prev.content || "").split("\n").length;
-      const currLines = (curr.content || "").split("\n").length;
-      changes.push({
-        path,
-        status: "modified",
-        additions: Math.max(0, currLines - prevLines + 1),
-        deletions: Math.max(0, prevLines - currLines + 1),
-      });
+      const prevIsBinary = isBinaryContent(prev.content);
+      if (currIsBinary || prevIsBinary) {
+        changes.push({
+          path,
+          status: "modified",
+          additions: 1,
+          deletions: 1,
+        });
+      } else {
+        const prevLines = (prev.content || "").split("\n").length;
+        const currLines = (curr.content || "").split("\n").length;
+        changes.push({
+          path,
+          status: "modified",
+          additions: Math.max(0, currLines - prevLines + 1),
+          deletions: Math.max(0, prevLines - currLines + 1),
+        });
+      }
     }
   }
 
   // Check deleted
   for (const [path, prev] of prevMap.entries()) {
     if (!currMap.has(path)) {
+      const prevIsBinary = isBinaryContent(prev.content);
       changes.push({
         path,
         status: "deleted",
         additions: 0,
-        deletions: (prev.content || "").split("\n").length,
+        deletions: prevIsBinary ? 1 : (prev.content || "").split("\n").length,
       });
     }
   }
@@ -78,7 +104,7 @@ export async function createCommit({
     content: f.content || "",
     language: f.language || "text",
     type: f.type || "file",
-    size: Buffer.byteLength(f.content || "", "utf8"),
+    size: computeSize(f.content),
   }));
 
   const changes = computeChanges(
