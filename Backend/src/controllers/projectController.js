@@ -1,5 +1,4 @@
 import Project from "../models/Project.js";
-import { importGitHubRepository as importGitHubRepositoryService } from "../services/githubProjectService.js";
 
 export const createProject = async (req, res) => {
   try {
@@ -130,40 +129,6 @@ export const deleteProject = async (req, res) => {
     res.status(500).json({
       message: "Failed to delete project",
       error: error.message,
-    });
-  }
-};
-
-export const importGitHubRepository = async (req, res) => {
-  try {
-    const { owner, repo } = req.body;
-
-    if (!owner || !repo) {
-      return res.status(400).json({
-        message: "Repository owner and name are required",
-      });
-    }
-
-    const result = await importGitHubRepositoryService(
-      req.user.id,
-      owner,
-      repo
-    );
-
-    return res.status(result.alreadyImported ? 200 : 201).json({
-      message: result.alreadyImported
-        ? "GitHub repository is already imported"
-        : "GitHub repository imported successfully",
-
-      project: result.project,
-
-      alreadyImported: result.alreadyImported,
-    });
-  } catch (error) {
-    console.error("GitHub repository import error:", error);
-
-    return res.status(500).json({
-      message: error.message || "Failed to import GitHub repository",
     });
   }
 };
