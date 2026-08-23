@@ -1,47 +1,52 @@
 import React from "react";
-import { Files, GitBranch, Search, Settings, Cloud } from "lucide-react";
-import { SiGithub } from "react-icons/si";
+import { Files, GitBranch, History, Search, Settings, Cloud } from "lucide-react";
 import { type ActivityBarTab } from "../../types/workspace";
+import { useTheme } from "../../context/ThemeContext";
 
 interface ActivityBarProps {
   activeTab: ActivityBarTab;
   onChangeTab: (tab: ActivityBarTab) => void;
   changedFilesCount: number;
-  isGitHubConnected: boolean;
+  commitsCount?: number;
 }
 
 export const ActivityBar: React.FC<ActivityBarProps> = ({
   activeTab,
   onChangeTab,
   changedFilesCount,
-  isGitHubConnected,
+  commitsCount = 0,
 }) => {
+  const { isDark } = useTheme();
+
   const topItems: { id: ActivityBarTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     {
       id: "explorer",
-      label: "Explorer (Ctrl+Shift+E)",
+      label: "Explorer (Files & Folders)",
       icon: <Files className="w-5 h-5" />,
     },
     {
       id: "sourceControl",
-      label: "Source Control & Commits (Ctrl+Shift+G)",
+      label: "Source Control (Changes & Staging)",
       icon: <GitBranch className="w-5 h-5" />,
       badge: changedFilesCount > 0 ? changedFilesCount : undefined,
     },
     {
-      id: "search",
-      label: "Search across Files (Ctrl+Shift+F)",
-      icon: <Search className="w-5 h-5" />,
+      id: "history",
+      label: "Commit Timeline & Time Travel (Rollback)",
+      icon: <History className="w-5 h-5" />,
+      badge: commitsCount > 0 ? commitsCount : undefined,
     },
     {
-      id: "github",
-      label: isGitHubConnected ? "GitHub Remote & Sync" : "Link to GitHub Repository",
-      icon: <SiGithub className="w-5 h-5" />,
+      id: "search",
+      label: "Search across Files",
+      icon: <Search className="w-5 h-5" />,
     },
   ];
 
   return (
-    <aside className="w-12 bg-white border-r border-slate-200 flex flex-col justify-between items-center py-2 shrink-0 select-none z-10">
+    <aside className={`w-12 border-r flex flex-col justify-between items-center py-2 shrink-0 select-none z-10 transition-colors duration-150 ${
+      isDark ? "bg-black border-neutral-800" : "bg-white border-neutral-200"
+    }`}>
       <div className="flex flex-col items-center gap-1 w-full">
         {topItems.map((item) => {
           const isActive = activeTab === item.id;
@@ -49,10 +54,14 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
             <button
               key={item.id}
               onClick={() => onChangeTab(item.id)}
-              className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-all group ${
+              className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-all group cursor-pointer ${
                 isActive
-                  ? "text-blue-600 bg-blue-50 border-l-2 border-blue-600 rounded-l-none font-semibold"
-                  : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                  ? isDark
+                    ? "text-blue-400 bg-blue-500/15 border-l-2 border-blue-500 rounded-l-none font-semibold"
+                    : "text-blue-600 bg-blue-50 border-l-2 border-blue-600 rounded-l-none font-semibold"
+                  : isDark
+                  ? "text-neutral-400 hover:text-white hover:bg-neutral-900"
+                  : "text-neutral-500 hover:text-black hover:bg-neutral-100"
               }`}
               title={item.label}
             >
@@ -71,10 +80,14 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
       <div className="flex flex-col items-center gap-1 w-full">
         <button
           onClick={() => onChangeTab("settings")}
-          className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
+          className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
             activeTab === "settings"
-              ? "text-blue-600 bg-blue-50"
-              : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+              ? isDark
+                ? "text-blue-400 bg-blue-500/15"
+                : "text-blue-600 bg-blue-50"
+              : isDark
+              ? "text-neutral-400 hover:text-white hover:bg-neutral-900"
+              : "text-neutral-500 hover:text-black hover:bg-neutral-100"
           }`}
           title="Project Settings"
         >
@@ -82,8 +95,8 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
         </button>
 
         <div
-          className="w-10 h-10 flex items-center justify-center text-emerald-600 cursor-default"
-          title="CloudForge Engine: Active & Ready"
+          className="w-10 h-10 flex items-center justify-center text-blue-500 cursor-default"
+          title="CloudForge Native VCS: Active"
         >
           <Cloud className="w-4 h-4" />
         </div>

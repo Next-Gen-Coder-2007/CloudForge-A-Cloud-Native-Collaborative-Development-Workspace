@@ -1,69 +1,28 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import {
-  Trash2,
   Save,
   RotateCcw,
-  RefreshCw,
+  Trash2,
+  GitBranch,
+  Cloud,
 } from "lucide-react";
-import {
-  SiReact,
-  SiNodedotjs,
-  SiPython,
-  SiHtml5,
-  SiGithub,
-} from "react-icons/si";
-import { FileCode } from "lucide-react";
+import API_URL from "../../config/api";
+import { useAlert } from "../../hooks/useAlert";
 import { type Project } from "../../types/project";
 import { type WorkspaceFile, type GitCommit } from "../../types/workspace";
-import { useAlert } from "../../hooks/useAlert";
-import API_URL from "../../config/api";
-import { useNavigate } from "react-router-dom";
+import { useTheme } from "../../context/ThemeContext";
 
 interface ProjectSettingsPanelProps {
   project: Project;
   filesCount: number;
   commitsCount: number;
-  onUpdateProject: (updated: Project) => void;
-  onResetTemplate?: (
-    updated: Project,
+  onUpdateProject: (project: Project) => void;
+  onResetTemplate: (
+    project: Project,
     files: WorkspaceFile[],
     commits: GitCommit[]
   ) => void;
-  onOpenGitHubModal: () => void;
 }
-
-const TEMPLATES = [
-  {
-    id: "react",
-    name: "React + TypeScript",
-    desc: "React 19, Vite, TypeScript & TailwindCSS",
-    icon: <SiReact className="w-4 h-4 text-cyan-500" />,
-  },
-  {
-    id: "nodejs",
-    name: "Node.js Express",
-    desc: "REST API with Express & routes",
-    icon: <SiNodedotjs className="w-4 h-4 text-emerald-500" />,
-  },
-  {
-    id: "python",
-    name: "Python App",
-    desc: "Python scripts with modular utilities",
-    icon: <SiPython className="w-4 h-4 text-blue-500" />,
-  },
-  {
-    id: "html-css",
-    name: "HTML / CSS / JS",
-    desc: "Vanilla web app with starter code",
-    icon: <SiHtml5 className="w-4 h-4 text-orange-500" />,
-  },
-  {
-    id: "blank",
-    name: "Blank Project",
-    desc: "Clean workspace with readme & starter file",
-    icon: <FileCode className="w-4 h-4 text-slate-500" />,
-  },
-];
 
 export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
   project,
@@ -71,26 +30,19 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
   commitsCount,
   onUpdateProject,
   onResetTemplate,
-  onOpenGitHubModal,
 }) => {
+  const { isDark } = useTheme();
   const { showError, showSuccess } = useAlert();
-  const navigate = useNavigate();
-
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description || "");
-  const [selectedTemplate, setSelectedTemplate] = useState(
-    project.template || "blank"
-  );
+  const [template, setTemplate] = useState(project.template || "blank");
   const [isSaving, setIsSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) {
-      showError("Project name is required");
-      return;
-    }
+    if (!name.trim()) return;
 
     try {
       setIsSaving(true);
@@ -101,65 +53,67 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim(),
-          template: selectedTemplate,
+          template,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        showError(data.message || "Failed to update project");
-        return;
+        throw new Error(data.message || "Failed to update project");
       }
 
       onUpdateProject(data.project);
-      showSuccess("Project settings updated successfully");
+      showSuccess("Project settings saved successfully");
     } catch (err: any) {
-      showError(err.message || "Failed to update project");
+      showError(err.message || "Failed to update project settings");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleApplyAndResetTemplate = async () => {
-    const tmplObj = TEMPLATES.find((t) => t.id === selectedTemplate);
-    const tmplName = tmplObj?.name || selectedTemplate;
-
-    const confirmed = window.confirm(
-      `Apply and re-seed workspace with "${tmplName}" starter files?\n\nWarning: This will replace current files in this project with the new template files.`
-    );
-    if (!confirmed) return;
+  const handleResetTemplate = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to reset workspace to "${template}" template? This will replace existing workspace files with template starter files.`
+      )
+    ) {
+      return;
+    }
 
     try {
       setIsResetting(true);
       const res = await fetch(
-        `${API_URL}/api/projects/${project._id}/workspace/reset-template`,
+        `${API_URL}/api/projects/${project._id}/reset-template`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ template: selectedTemplate }),
+          body: JSON.stringify({ template }),
         }
       );
 
       const data = await res.json();
       if (!res.ok) {
-        showError(data.message || "Failed to reset template");
-        return;
+        throw new Error(data.message || "Failed to reset template");
       }
 
-      if (onResetTemplate) {
-        onResetTemplate(data.project, data.files, data.commits);
-      }
-      showSuccess(`Workspace switched to ${tmplName} successfully!`);
+      onResetTemplate(data.project, data.files, data.commits || []);
+      showSuccess(`Workspace reset to starter template "${template}"`);
     } catch (err: any) {
-      showError(err.message || "Failed to reset template");
+      showError(err.message || "Failed to reset workspace template");
     } finally {
       setIsResetting(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to delete this project?")) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to delete "${project.name}"? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
 
     try {
       setIsDeleting(true);
@@ -168,186 +122,168 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
         credentials: "include",
       });
 
+      const data = await res.json();
       if (!res.ok) {
-        showError("Failed to delete project");
-        return;
+        throw new Error(data.message || "Failed to delete project");
       }
 
       showSuccess("Project deleted successfully");
-      navigate("/projects");
+      window.location.href = "/projects";
     } catch (err: any) {
       showError(err.message || "Failed to delete project");
-    } finally {
       setIsDeleting(false);
     }
   };
 
-  const isGitHubLinked =
-    project.source?.type === "github" || project.gitRemote?.connected;
-
   return (
-    <div className="h-full flex flex-col bg-slate-50/70 text-slate-800 select-none overflow-y-auto font-sans text-xs border-r border-slate-200">
-      <div className="px-3 py-2.5 border-b border-slate-200 bg-white/60">
-        <span className="text-[11px] font-bold tracking-wider uppercase text-slate-500">
+    <div className={`h-full flex flex-col select-none overflow-y-auto text-xs font-sans transition-colors duration-150 ${
+      isDark ? "bg-neutral-950 text-white" : "bg-neutral-50/70 text-black"
+    }`}>
+      <div className={`p-3 border-b shrink-0 flex items-center justify-between ${
+        isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-neutral-200"
+      }`}>
+        <span className={`font-bold text-xs uppercase tracking-wider ${isDark ? "text-white" : "text-black"}`}>
           Project Settings
         </span>
       </div>
 
       <div className="p-4 space-y-4">
         <div className="grid grid-cols-2 gap-2">
-          <div className="p-2.5 bg-white rounded-xl border border-slate-200 text-center shadow-2xs">
-            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">
+          <div className={`p-2.5 rounded-xl border text-center shadow-2xs ${
+            isDark ? "bg-black border-neutral-800" : "bg-white border-neutral-200"
+          }`}>
+            <p className={`text-[10px] font-medium uppercase tracking-wider ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
               Total Files
             </p>
-            <p className="text-base font-bold text-slate-900 mt-0.5">{filesCount}</p>
+            <p className={`text-base font-bold mt-0.5 ${isDark ? "text-white" : "text-black"}`}>{filesCount}</p>
           </div>
-          <div className="p-2.5 bg-white rounded-xl border border-slate-200 text-center shadow-2xs">
-            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">
+          <div className={`p-2.5 rounded-xl border text-center shadow-2xs ${
+            isDark ? "bg-black border-neutral-800" : "bg-white border-neutral-200"
+          }`}>
+            <p className={`text-[10px] font-medium uppercase tracking-wider ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
               Total Commits
             </p>
-            <p className="text-base font-bold text-slate-900 mt-0.5">{commitsCount}</p>
+            <p className="text-base font-bold text-blue-500 mt-0.5">{commitsCount}</p>
           </div>
         </div>
 
-        <form onSubmit={handleSave} className="space-y-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+        <form onSubmit={handleSave} className={`space-y-3 p-3.5 rounded-xl border shadow-2xs ${
+          isDark ? "bg-black border-neutral-800" : "bg-white border-neutral-200"
+        }`}>
           <div>
-            <label className="block text-slate-700 font-semibold mb-1">
+            <label className={`block font-semibold mb-1 ${isDark ? "text-neutral-200" : "text-neutral-700"}`}>
               Project Name
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:border-blue-500 focus:bg-white"
+              required
+              className={`w-full px-3 py-1.5 border rounded-lg outline-none focus:border-blue-500 ${
+                isDark ? "bg-neutral-900 border-neutral-700 text-white" : "bg-white border-neutral-300 text-black"
+              }`}
             />
           </div>
 
           <div>
-            <label className="block text-slate-700 font-semibold mb-1">
+            <label className={`block font-semibold mb-1 ${isDark ? "text-neutral-200" : "text-neutral-700"}`}>
               Description
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:border-blue-500 focus:bg-white resize-none font-sans"
+              className={`w-full px-3 py-1.5 border rounded-lg outline-none focus:border-blue-500 resize-none ${
+                isDark ? "bg-neutral-900 border-neutral-700 text-white" : "bg-white border-neutral-300 text-black"
+              }`}
             />
+          </div>
+
+          <div>
+            <label className={`block font-semibold mb-1 ${isDark ? "text-neutral-200" : "text-neutral-700"}`}>
+              Template Type
+            </label>
+            <select
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+              className={`w-full px-2.5 py-1.5 border rounded-lg outline-none focus:border-blue-500 ${
+                isDark ? "bg-neutral-900 border-neutral-700 text-white" : "bg-white border-neutral-300 text-black"
+              }`}
+            >
+              <option value="blank">Blank Project</option>
+              <option value="react">React Application (Vite + TSX)</option>
+              <option value="nodejs">Node.js Express Backend</option>
+              <option value="python">Python 3 Application</option>
+              <option value="html-css">HTML5 & CSS3 Webpage</option>
+            </select>
           </div>
 
           <button
             type="submit"
             disabled={isSaving}
-            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+            className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
           >
             <Save className="w-3.5 h-3.5" />
-            <span>{isSaving ? "Saving..." : "Save Name & Description"}</span>
+            <span>{isSaving ? "Saving..." : "Save Project Settings"}</span>
           </button>
         </form>
 
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-          <div>
-            <label className="block text-slate-700 font-semibold mb-1">
-              Template Preset
-            </label>
-            <p className="text-[10px] text-slate-500 mb-2">
-              Select or switch the workspace starter configuration.
-            </p>
-
-            <div className="space-y-1.5">
-              {TEMPLATES.map((tmpl) => {
-                const isSelected = selectedTemplate === tmpl.id;
-                return (
-                  <div
-                    key={tmpl.id}
-                    onClick={() => setSelectedTemplate(tmpl.id)}
-                    className={`p-2 rounded-lg border cursor-pointer flex items-center justify-between transition-all ${
-                      isSelected
-                        ? "bg-blue-50/70 border-blue-500 shadow-2xs"
-                        : "bg-slate-50/60 border-slate-200 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="shrink-0">{tmpl.icon}</div>
-                      <div className="min-w-0">
-                        <p className={`font-semibold text-xs ${isSelected ? "text-blue-900" : "text-slate-800"}`}>
-                          {tmpl.name}
-                        </p>
-                        <p className="text-[10px] text-slate-500 truncate">
-                          {tmpl.desc}
-                        </p>
-                      </div>
-                    </div>
-
-                    {isSelected && (
-                      <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 ml-2" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+        <div className={`p-3.5 rounded-xl border space-y-2.5 shadow-2xs ${
+          isDark ? "bg-black border-neutral-800" : "bg-white border-neutral-200"
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className={`font-semibold ${isDark ? "text-white" : "text-black"}`}>CloudForge VCS Status</span>
+            <Cloud className="w-4 h-4 text-blue-500" />
           </div>
+          <p className={`text-[11px] leading-relaxed ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
+            All code changes, branches, snapshots, and commits are managed natively by our built-in CloudForge Version Control System.
+          </p>
+          <div className={`flex items-center justify-between text-[11px] p-2 rounded-lg border font-mono ${
+            isDark ? "bg-neutral-900 border-neutral-800 text-neutral-300" : "bg-neutral-50 border-neutral-100 text-neutral-700"
+          }`}>
+            <span>Active Branch:</span>
+            <span className="font-bold text-blue-500 flex items-center gap-1">
+              <GitBranch className="w-3 h-3" />
+              {project.currentBranch || "main"}
+            </span>
+          </div>
+        </div>
 
+        <div className={`p-3.5 rounded-xl border space-y-2.5 shadow-2xs ${
+          isDark ? "bg-black border-neutral-800" : "bg-white border-neutral-200"
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className={`font-semibold ${isDark ? "text-white" : "text-black"}`}>Template Starter Re-seed</span>
+            <RotateCcw className="w-3.5 h-3.5 text-neutral-400" />
+          </div>
+          <p className={`text-[11px] leading-relaxed ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
+            Reset this workspace to default template starter files for <strong>{template}</strong>.
+          </p>
           <button
             type="button"
-            onClick={handleApplyAndResetTemplate}
+            onClick={handleResetTemplate}
             disabled={isResetting}
-            className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-2xs disabled:opacity-50"
-            title="Re-seed workspace files from selected template"
+            className={`w-full py-1.5 rounded-lg font-semibold text-[11px] flex items-center justify-center gap-1.5 transition-colors border cursor-pointer ${
+              isDark
+                ? "bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
+                : "bg-neutral-100 hover:bg-neutral-200 text-black border-neutral-200"
+            }`}
           >
-            {isResetting ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                <span>Re-seeding workspace...</span>
-              </>
-            ) : (
-              <>
-                <RotateCcw className="w-3.5 h-3.5 text-blue-600" />
-                <span>Apply & Re-seed Template Files</span>
-              </>
-            )}
+            <RotateCcw className="w-3.5 h-3.5 text-blue-500" />
+            <span>{isResetting ? "Re-seeding..." : "Re-seed Starter Template"}</span>
           </button>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="font-semibold text-slate-800">GitHub Remote</span>
-            <SiGithub className="w-4 h-4 text-slate-700" />
-          </div>
-
-          {isGitHubLinked ? (
-            <div className="space-y-1 text-slate-600">
-              <p className="text-[11px] font-mono text-blue-700 font-semibold truncate">
-                {project.source?.github?.fullName || project.gitRemote?.fullName}
-              </p>
-              <p className="text-[10px] text-slate-500">
-                Default Branch: {project.currentBranch || "main"}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-[11px] text-slate-500">
-                This project is not currently linked to a remote GitHub repository.
-              </p>
-              <button
-                type="button"
-                onClick={onOpenGitHubModal}
-                className="w-full py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-[11px] flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
-              >
-                <SiGithub className="w-3.5 h-3.5" />
-                <span>Link or Publish to GitHub</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2 text-[11px] text-slate-500 font-mono shadow-2xs">
+        <div className={`p-3 rounded-xl border space-y-2 text-[11px] font-mono shadow-2xs ${
+          isDark ? "bg-black border-neutral-800 text-neutral-400" : "bg-white border-neutral-200 text-neutral-500"
+        }`}>
           <div className="flex items-center justify-between">
             <span>Project ID:</span>
-            <span className="truncate max-w-[120px] text-slate-700 font-bold">{project._id}</span>
+            <span className={`truncate max-w-[120px] font-bold ${isDark ? "text-neutral-200" : "text-neutral-800"}`}>{project._id}</span>
           </div>
           <div className="flex items-center justify-between">
             <span>Created:</span>
-            <span className="text-slate-700">
+            <span className={isDark ? "text-neutral-200" : "text-neutral-800"}>
               {new Date(project.createdAt).toLocaleDateString()}
             </span>
           </div>
@@ -358,7 +294,7 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
             type="button"
             onClick={handleDelete}
             disabled={isDeleting}
-            className="w-full py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-xl font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+            className="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-500 rounded-xl font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span>Delete Project</span>
