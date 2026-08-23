@@ -8,6 +8,7 @@ interface ActivityBarProps {
   onChangeTab: (tab: ActivityBarTab) => void;
   changedFilesCount: number;
   commitsCount?: number;
+  isSidebarOpen?: boolean;
 }
 
 export const ActivityBar: React.FC<ActivityBarProps> = ({
@@ -15,6 +16,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
   onChangeTab,
   changedFilesCount,
   commitsCount = 0,
+  isSidebarOpen = true,
 }) => {
   const { isDark } = useTheme();
 
@@ -44,12 +46,14 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
   ];
 
   return (
-    <aside className={`w-12 border-r flex flex-col justify-between items-center py-2 shrink-0 select-none z-10 transition-colors duration-150 ${
-      isDark ? "bg-black border-neutral-800" : "bg-white border-neutral-200"
-    }`}>
+    <aside
+      className={`w-12 border-r flex flex-col justify-between items-center py-2 shrink-0 select-none z-10 transition-colors duration-150 ${
+        isDark ? "bg-black border-neutral-800" : "bg-white border-neutral-200"
+      }`}
+    >
       <div className="flex flex-col items-center gap-1 w-full">
         {topItems.map((item) => {
-          const isActive = activeTab === item.id;
+          const isActive = activeTab === item.id && isSidebarOpen;
           return (
             <button
               key={item.id}
@@ -57,13 +61,13 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
               className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-all group cursor-pointer ${
                 isActive
                   ? isDark
-                    ? "text-blue-400 bg-blue-500/15 border-l-2 border-blue-500 rounded-l-none font-semibold"
-                    : "text-blue-600 bg-blue-50 border-l-2 border-blue-600 rounded-l-none font-semibold"
+                    ? "text-blue-400 bg-blue-500/15 border-l-2 border-blue-500 rounded-l-none font-semibold shadow-xs"
+                    : "text-blue-600 bg-blue-50 border-l-2 border-blue-600 rounded-l-none font-semibold shadow-xs"
                   : isDark
                   ? "text-neutral-400 hover:text-white hover:bg-neutral-900"
                   : "text-neutral-500 hover:text-black hover:bg-neutral-100"
               }`}
-              title={item.label}
+              title={isActive ? `${item.label} (Click to minimize)` : item.label}
             >
               {item.icon}
 
@@ -80,16 +84,16 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
       <div className="flex flex-col items-center gap-1 w-full">
         <button
           onClick={() => onChangeTab("settings")}
-          className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
-            activeTab === "settings"
+          className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
+            activeTab === "settings" && isSidebarOpen
               ? isDark
-                ? "text-blue-400 bg-blue-500/15"
-                : "text-blue-600 bg-blue-50"
+                ? "text-blue-400 bg-blue-500/15 border-l-2 border-blue-500 rounded-l-none font-semibold"
+                : "text-blue-600 bg-blue-50 border-l-2 border-blue-600 rounded-l-none font-semibold"
               : isDark
               ? "text-neutral-400 hover:text-white hover:bg-neutral-900"
               : "text-neutral-500 hover:text-black hover:bg-neutral-100"
           }`}
-          title="Project Settings"
+          title={activeTab === "settings" && isSidebarOpen ? "Project Settings (Click to minimize)" : "Project Settings"}
         >
           <Settings className="w-5 h-5" />
         </button>
@@ -104,3 +108,4 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
     </aside>
   );
 };
+export default ActivityBar;

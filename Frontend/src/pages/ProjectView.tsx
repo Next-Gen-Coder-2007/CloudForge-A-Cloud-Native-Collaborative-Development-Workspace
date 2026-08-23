@@ -53,7 +53,61 @@ export default function ProjectView() {
 
   const [activeActivityTab, setActiveActivityTab] =
     useState<ActivityBarTab>("explorer");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Dynamic Sidebar Resizing (VS Code style)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const saved = localStorage.getItem("cf_sidebar_width");
+    return saved ? parseInt(saved, 10) : 280;
+  });
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem("cf_sidebar_width", sidebarWidth.toString());
+  }, [sidebarWidth]);
+
+  const handleMouseDownResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingSidebar(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingSidebar) return;
+      // 48px is the width of the fixed ActivityBar
+      const activityBarWidth = 48;
+      const newWidth = Math.max(180, Math.min(650, e.clientX - activityBarWidth));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingSidebar(false);
+    };
+
+    if (isResizingSidebar) {
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    }
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingSidebar]);
+
+  const handleToggleActivityTab = (tab: ActivityBarTab) => {
+    if (activeActivityTab === tab) {
+      setIsSidebarOpen((prev) => !prev);
+    } else {
+      setActiveActivityTab(tab);
+      setIsSidebarOpen(true);
+    }
+  };
 
   const [changedFiles, setChangedFiles] = useState<
     {
@@ -304,12 +358,12 @@ export default function ProjectView() {
     );
   };
 
-  const handleSaveFile = async (fileId: string) => {
+  const handleSaveFile = async (fileId: string, isSilent: boolean = false) => {
     const tab = tabs.find((t) => t.fileId === fileId);
     if (!tab) return;
 
     try {
-      setIsSaving(true);
+      if (!isSilent) setIsSaving(true);
       const res = await fetch(
         `${API_URL}/api/projects/${id}/files/${fileId}`,
         {
@@ -339,21 +393,26 @@ export default function ProjectView() {
         )
       );
 
-      showSuccess(`Saved "${tab.name}"`);
+      // Only show success toast for explicit manual save (button click or Ctrl+S)
+      if (!isSilent) {
+        showSuccess(`Saved "${tab.name}"`);
+      }
     } catch (err: any) {
-      showError(err.message || "Failed to save file");
+      if (!isSilent) {
+        showError(err.message || "Failed to save file");
+      }
     } finally {
-      setIsSaving(false);
+      if (!isSilent) setIsSaving(false);
     }
   };
 
-  const handleCreateFile = async (name: string, path: string) => {
+  const handleCreateFile = async (name: string, path: string, content: string = "") => {
     try {
       const res = await fetch(`${API_URL}/api/projects/${id}/files`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name, path, type: "file", content: "" }),
+        body: JSON.stringify({ name, path, type: "file", content }),
       });
 
       const data = await res.json();
@@ -456,20 +515,48 @@ export default function ProjectView() {
     uploadedFiles: { name: string; path: string; content: string; type?: "file" | "directory" }[]
   ) => {
     try {
-      for (const item of uploadedFiles) {
-        if (!item.type || item.type === "file") {
-          await handleCreateFile(item.name, item.path);
-        }
+      const res = await fetch(`${API_URL}/api/projects/${id}/files/batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ files: uploadedFiles }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to upload files");
       }
-      loadWorkspace();
-      showSuccess(`Uploaded ${uploadedFiles.length} files`);
+
+      if (data.files) {
+        setFiles(data.files);
+      } else {
+        await loadWorkspace();
+      }
+
+      showSuccess(`Uploaded ${uploadedFiles.length} item${uploadedFiles.length !== 1 ? "s" : ""}`);
     } catch (err: any) {
       showError(err.message || "Upload failed");
     }
   };
 
   const handleDownloadFile = (file: WorkspaceFile) => {
-    const blob = new Blob([file.content || ""], { type: "text/plain;charset=utf-8" });
+    let blob: Blob;
+    const isDataUrl = typeof file.content === "string" && file.content.startsWith("data:");
+
+    if (isDataUrl) {
+      const mime = file.content.split(";")[0].replace("data:", "") || "application/octet-stream";
+      const base64 = file.content.split(",")[1] || "";
+      const byteChars = window.atob(base64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNumbers[i] = byteChars.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      blob = new Blob([byteArray], { type: mime });
+    } else {
+      blob = new Blob([file.content || ""], { type: "text/plain;charset=utf-8" });
+    }
+
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -487,7 +574,14 @@ export default function ProjectView() {
         .filter((f) => f.type === "file")
         .forEach((f) => {
           const cleanPath = f.path.startsWith("/") ? f.path.slice(1) : f.path;
-          zip.file(cleanPath, f.content || "");
+          const isDataUrl = typeof f.content === "string" && f.content.startsWith("data:");
+
+          if (isDataUrl) {
+            const base64 = f.content.split(",")[1] || "";
+            zip.file(cleanPath, base64, { base64: true });
+          } else {
+            zip.file(cleanPath, f.content || "");
+          }
         });
 
       const blob = await zip.generateAsync({ type: "blob" });
@@ -719,14 +813,24 @@ export default function ProjectView() {
         >
           <ActivityBar
             activeTab={activeActivityTab}
-            onChangeTab={(tab) => setActiveActivityTab(tab)}
+            onChangeTab={handleToggleActivityTab}
+            isSidebarOpen={isSidebarOpen}
             changedFilesCount={changedFiles.length}
             commitsCount={commits.length}
           />
 
-          <div className={`w-64 sm:w-72 md:w-80 h-full border-r shrink-0 overflow-hidden flex flex-col transition-colors duration-150 ${
-            isDark ? "border-neutral-800 bg-neutral-950" : "border-neutral-200 bg-neutral-50"
-          }`}>
+          <div
+            style={{
+              width: isSidebarOpen ? `${sidebarWidth}px` : "0px",
+            }}
+            className={`h-full border-r shrink-0 overflow-hidden flex flex-col ${
+              isResizingSidebar ? "" : "transition-all duration-150 ease-in-out"
+            } ${
+              isSidebarOpen ? "opacity-100" : "w-0 border-r-0 opacity-0 pointer-events-none"
+            } ${
+              isDark ? "border-neutral-800 bg-neutral-950" : "border-neutral-200 bg-neutral-50"
+            }`}
+          >
             {activeActivityTab === "explorer" && (
               <FileExplorer
                 files={files}
@@ -740,6 +844,7 @@ export default function ProjectView() {
                 onDownloadFile={handleDownloadFile}
                 onRefreshFiles={loadWorkspace}
                 projectName={project.name}
+                onCollapse={() => setIsSidebarOpen(false)}
               />
             )}
 
@@ -795,6 +900,24 @@ export default function ProjectView() {
               />
             )}
           </div>
+
+          {/* VS Code Interactive Drag Resize Handle */}
+          {isSidebarOpen && (
+            <div
+              onMouseDown={handleMouseDownResize}
+              onDoubleClick={() => setSidebarWidth(280)}
+              className={`w-1 cursor-col-resize select-none h-full shrink-0 relative z-20 group transition-colors ${
+                isResizingSidebar
+                  ? "bg-blue-500 w-1.5 shadow-xs"
+                  : isDark
+                  ? "hover:bg-blue-500/70 bg-transparent"
+                  : "hover:bg-blue-500/70 bg-transparent"
+              }`}
+              title="Drag to resize sidebar (Double click to reset to 280px)"
+            >
+              <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
+            </div>
+          )}
         </div>
 
         <div className={`flex-1 flex flex-col h-full overflow-hidden min-w-0 transition-colors duration-150 ${

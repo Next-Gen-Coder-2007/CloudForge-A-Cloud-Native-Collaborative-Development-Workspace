@@ -31,6 +31,10 @@ const projectFileSchema = new mongoose.Schema(
       type: String,
       default: "plaintext",
     },
+    mimeType: {
+      type: String,
+      default: "text/plain",
+    },
     size: {
       type: Number,
       default: 0,

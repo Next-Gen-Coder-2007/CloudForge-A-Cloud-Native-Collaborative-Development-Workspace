@@ -8,6 +8,7 @@ export interface WorkspaceFile {
   type: "file" | "directory";
   content: string;
   language: string;
+  mimeType?: string;
   size: number;
   sha?: string;
   createdAt?: string;
@@ -65,6 +66,7 @@ export interface EditorTab {
   name: string;
   path: string;
   language: string;
+  mimeType?: string;
   content: string;
   initialContent: string;
   isDirty: boolean;
