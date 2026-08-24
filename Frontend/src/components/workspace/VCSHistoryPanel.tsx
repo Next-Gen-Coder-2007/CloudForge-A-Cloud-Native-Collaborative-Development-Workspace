@@ -3,8 +3,6 @@ import {
   History,
   GitCommit as GitCommitIcon,
   RotateCcw,
-  Clock,
-  User,
   GitBranch,
   Search,
   Tag,
