@@ -59,7 +59,7 @@ export default function ProjectView() {
   // Dynamic Sidebar Resizing (VS Code style)
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const saved = localStorage.getItem("cf_sidebar_width");
-    return saved ? parseInt(saved, 10) : 280;
+    return saved ? Math.max(220, parseInt(saved, 10)) : 280;
   });
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
 
@@ -77,7 +77,7 @@ export default function ProjectView() {
       if (!isResizingSidebar) return;
       // 48px is the width of the fixed ActivityBar
       const activityBarWidth = 48;
-      const newWidth = Math.max(180, Math.min(650, e.clientX - activityBarWidth));
+      const newWidth = Math.max(220, Math.min(650, e.clientX - activityBarWidth));
       setSidebarWidth(newWidth);
     };
 
@@ -824,81 +824,77 @@ export default function ProjectView() {
               width: isSidebarOpen ? `${sidebarWidth}px` : "0px",
             }}
             className={`h-full border-r shrink-0 overflow-hidden flex flex-col ${
-              isResizingSidebar ? "" : "transition-all duration-150 ease-in-out"
+              isResizingSidebar ? "" : "transition-all duration-200 ease-in-out"
             } ${
               isSidebarOpen ? "opacity-100" : "w-0 border-r-0 opacity-0 pointer-events-none"
             } ${
               isDark ? "border-neutral-800 bg-neutral-950" : "border-neutral-200 bg-neutral-50"
             }`}
           >
-            {activeActivityTab === "explorer" && (
-              <FileExplorer
-                files={files}
-                activeFileId={activeTabId}
-                onSelectFile={handleSelectFile}
-                onCreateFile={handleCreateFile}
-                onCreateFolder={handleCreateFolder}
-                onRenameFile={handleRenameFile}
-                onDeleteFile={handleDeleteFile}
-                onUploadFiles={handleUploadFiles}
-                onDownloadFile={handleDownloadFile}
-                onRefreshFiles={loadWorkspace}
-                projectName={project.name}
-                onCollapse={() => setIsSidebarOpen(false)}
-              />
-            )}
+            <div
+              style={{ width: `${sidebarWidth}px` }}
+              className="h-full min-w-[220px] flex flex-col overflow-hidden shrink-0"
+            >
+              {activeActivityTab === "explorer" && (
+                <FileExplorer
+                  files={files}
+                  activeFileId={activeTabId}
+                  onSelectFile={handleSelectFile}
+                  onCreateFile={handleCreateFile}
+                  onCreateFolder={handleCreateFolder}
+                  onRenameFile={handleRenameFile}
+                  onDeleteFile={handleDeleteFile}
+                  onUploadFiles={handleUploadFiles}
+                  onDownloadFile={handleDownloadFile}
+                  onRefreshFiles={loadWorkspace}
+                  projectName={project.name}
+                  onCollapse={() => setIsSidebarOpen(false)}
+                />
+              )}
 
-            {activeActivityTab === "sourceControl" && (
-              <SourceControlPanel
-                project={project}
-                changedFiles={changedFiles}
-                currentBranch={currentBranch}
-                branches={branches}
-                onCommit={handleCommit}
-                onStageFile={handleStageFile}
-                onUnstageFile={handleUnstageFile}
-                onStageAll={handleStageAll}
-                onUnstageAll={handleUnstageAll}
-                onDiscardChange={handleDiscardChange}
-                onInspectDiff={handleInspectDiff}
-                onOpenBranchManager={() => setIsBranchModalOpen(true)}
-              />
-            )}
+              {activeActivityTab === "sourceControl" && (
+                <SourceControlPanel
+                  project={project}
+                  changedFiles={changedFiles}
+                  currentBranch={currentBranch}
+                  branches={branches}
+                  onCommit={handleCommit}
+                  onStageFile={handleStageFile}
+                  onUnstageFile={handleUnstageFile}
+                  onStageAll={handleStageAll}
+                  onUnstageAll={handleUnstageAll}
+                  onDiscardChange={handleDiscardChange}
+                  onInspectDiff={handleInspectDiff}
+                  onOpenBranchManager={() => setIsBranchModalOpen(true)}
+                />
+              )}
 
-            {activeActivityTab === "history" && (
-              <VCSHistoryPanel
-                projectId={project._id}
-                commits={commits}
-                currentBranch={currentBranch}
-                onCommitSelected={(c) => setSelectedCommit(c)}
-                onRollbackComplete={handleRollbackComplete}
-              />
-            )}
+              {activeActivityTab === "history" && (
+                <VCSHistoryPanel
+                  projectId={project._id}
+                  commits={commits}
+                  currentBranch={currentBranch}
+                  onCommitSelected={(c) => setSelectedCommit(c)}
+                  onRollbackComplete={handleRollbackComplete}
+                />
+              )}
 
-            {activeActivityTab === "search" && (
-              <SearchPanel
-                files={files}
-                onSelectMatch={(file) => handleSelectFile(file)}
-              />
-            )}
+              {activeActivityTab === "search" && (
+                <SearchPanel
+                  files={files}
+                  onSelectMatch={(file) => handleSelectFile(file)}
+                />
+              )}
 
-            {activeActivityTab === "settings" && (
-              <ProjectSettingsPanel
-                project={project}
-                filesCount={files.filter((f) => f.type === "file").length}
-                commitsCount={commits.length}
-                onUpdateProject={(updated) => setProject(updated)}
-                onResetTemplate={(updatedProj, newFiles, newCommits) => {
-                  setProject(updatedProj);
-                  setFiles(newFiles);
-                  setCommits(newCommits);
-                  setTabs([]);
-                  setActiveTabId(null);
-                  setChangedFiles([]);
-                  setDiffTarget(null);
-                }}
-              />
-            )}
+              {activeActivityTab === "settings" && (
+                <ProjectSettingsPanel
+                  project={project}
+                  filesCount={files.filter((f) => f.type === "file").length}
+                  commitsCount={commits.length}
+                  onUpdateProject={(updated) => setProject(updated)}
+                />
+              )}
+            </div>
           </div>
 
           {/* VS Code Interactive Drag Resize Handle */}
