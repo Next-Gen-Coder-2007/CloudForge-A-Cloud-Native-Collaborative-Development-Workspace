@@ -4,7 +4,6 @@ import {
   ArrowRight,
   X,
   RotateCw,
-  FileCode,
   Layers,
 } from "lucide-react";
 import { DiffEditor } from "@monaco-editor/react";

@@ -10,8 +10,6 @@ import {
   Tag,
   Trash2,
   Edit2,
-  AlertTriangle,
-  Layers,
 } from "lucide-react";
 import { vcsService } from "../../services/vcsService";
 import type { GitCommit, GitTag, WorkspaceFile } from "../../types/workspace";

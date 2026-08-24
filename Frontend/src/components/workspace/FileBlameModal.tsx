@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
-  FileText,
   Clock,
   User,
-  History,
   X,
   RotateCw,
   GitCommit as GitCommitIcon,

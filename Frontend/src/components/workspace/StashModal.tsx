@@ -7,10 +7,8 @@ import {
   X,
   RotateCw,
   Clock,
-  User,
   GitBranch,
 } from "lucide-react";
-import { FileIcon } from "./FileIcon";
 import { useTheme } from "../../context/ThemeContext";
 import { vcsService } from "../../services/vcsService";
 import type { GitStash, WorkspaceFile } from "../../types/workspace";

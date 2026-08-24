@@ -7,7 +7,6 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronRight,
-  GitMerge,
   Archive,
   GitCompare,
   Trash2,
