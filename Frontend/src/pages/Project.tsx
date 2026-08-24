@@ -9,6 +9,7 @@ import EmptyState from "../components/ui/EmptyState";
 import ProjectGrid from "../components/projects/ProjectGrid";
 import CreateProjectModal from "../components/projects/CreateProjectModal";
 import EditProjectModal from "../components/projects/EditProjectModal";
+import DeleteProjectModal from "../components/projects/DeleteProjectModal";
 import { type Project } from "../types/project";
 
 interface User {
@@ -26,6 +27,7 @@ function Projects() {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -56,7 +58,7 @@ function Projects() {
     const query = search.trim().toLowerCase();
     if (!query) return projects;
     return projects.filter((project) =>
-      [project.name, project.description, project.template].some((value) => value?.toLowerCase().includes(query))
+      [project.name, project.description].some((value) => value?.toLowerCase().includes(query))
     );
   }, [projects, search]);
 
@@ -69,9 +71,10 @@ function Projects() {
     setEditingProject(null);
   };
 
-  const handleDeleteProject = async (projectId: string) => {
+  const handleConfirmDelete = async () => {
+    if (!deletingProject) return;
     try {
-      const response = await fetch(`${API_URL}/api/projects/${projectId}`, {
+      const response = await fetch(`${API_URL}/api/projects/${deletingProject._id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -80,8 +83,9 @@ function Projects() {
         showError(data.message || "Failed to delete project.");
         return;
       }
-      setProjects((prev) => prev.filter((project) => project._id !== projectId));
-      showSuccess("Project deleted successfully.");
+      setProjects((prev) => prev.filter((project) => project._id !== deletingProject._id));
+      showSuccess(`Deleted project "${deletingProject.name}"`);
+      setDeletingProject(null);
     } catch (error) {
       showError("Failed to delete project.");
     }
@@ -148,7 +152,7 @@ function Projects() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search projects by name, description or template..."
+                placeholder="Search projects by name or description..."
                 className={`w-full px-3.5 py-2.5 border rounded-xl outline-none text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
                   isDark
                     ? "bg-black border-neutral-700 text-white placeholder-neutral-500 focus:bg-black"
@@ -179,7 +183,7 @@ function Projects() {
         ) : (
           <ProjectGrid
             projects={filteredProjects}
-            onDelete={handleDeleteProject}
+            onDelete={(project) => setDeletingProject(project)}
             onEdit={(project) => setEditingProject(project)}
           />
         )}
@@ -187,6 +191,14 @@ function Projects() {
 
       <CreateProjectModal isOpen={showCreate} onClose={() => setShowCreate(false)} onCreated={handleProjectCreated} />
       <EditProjectModal project={editingProject} onClose={() => setEditingProject(null)} onUpdated={handleProjectUpdated} />
+      {deletingProject && (
+        <DeleteProjectModal
+          isOpen={Boolean(deletingProject)}
+          onClose={() => setDeletingProject(null)}
+          projectName={deletingProject.name}
+          onConfirmDelete={handleConfirmDelete}
+        />
+      )}
     </div>
   );
 }

@@ -1,11 +1,11 @@
 import { useNavigate } from "react-router-dom";
 import { type Project } from "../../types/project";
-import { GitBranch } from "lucide-react";
+import { GitBranch, Trash2 } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 
 interface ProjectCardProps {
   project: Project;
-  onDelete: (projectId: string) => void;
+  onDelete: (project: Project) => void;
   onEdit?: (project: Project) => void;
 }
 
@@ -16,16 +16,6 @@ function ProjectCard({
 }: ProjectCardProps) {
   const navigate = useNavigate();
   const { isDark } = useTheme();
-
-  const handleDelete = () => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${project.name}"?`
-    );
-
-    if (confirmed) {
-      onDelete(project._id);
-    }
-  };
 
   return (
     <div className={`border rounded-2xl p-4 sm:p-5 shadow-2xs transition-all flex flex-col justify-between group font-sans ${
@@ -43,14 +33,6 @@ function ProjectCard({
             </h3>
 
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {project.template && (
-                <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider ${
-                  isDark ? "bg-neutral-900 text-neutral-300" : "bg-neutral-100 text-neutral-700"
-                }`}>
-                  {project.template}
-                </span>
-              )}
-
               <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-semibold flex items-center gap-1 ${
                 isDark ? "bg-blue-500/15 text-blue-400 border border-blue-500/30" : "bg-blue-50 text-blue-700 border border-blue-100"
               }`}>
@@ -74,13 +56,13 @@ function ProjectCard({
             )}
 
             <button
-              onClick={handleDelete}
-              className={`p-1 rounded-lg transition-colors text-lg leading-none cursor-pointer ${
+              onClick={() => onDelete(project)}
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                 isDark ? "text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10" : "text-neutral-400 hover:text-rose-600 hover:bg-rose-50"
               }`}
               title="Delete Project"
             >
-              ×
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </div>

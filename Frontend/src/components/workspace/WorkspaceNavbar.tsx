@@ -1,5 +1,3 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -12,6 +10,7 @@ import {
   Moon,
 } from "lucide-react";
 import { type Project } from "../../types/project";
+import { useNavigate } from "react-router-dom";
 import { useTheme } from "../../context/ThemeContext";
 
 interface WorkspaceNavbarProps {
@@ -170,3 +169,5 @@ export const WorkspaceNavbar: React.FC<WorkspaceNavbarProps> = ({
     </header>
   );
 };
+
+export default WorkspaceNavbar;

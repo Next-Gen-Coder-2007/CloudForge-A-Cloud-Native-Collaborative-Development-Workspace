@@ -1,5 +1,5 @@
 import React from "react";
-import { Files, GitBranch, History, Search, Settings, Cloud } from "lucide-react";
+import { Files, GitBranch, History, Search, KeyRound, Rocket, Settings, Cloud } from "lucide-react";
 import { type ActivityBarTab } from "../../types/workspace";
 import { useTheme } from "../../context/ThemeContext";
 
@@ -8,6 +8,7 @@ interface ActivityBarProps {
   onChangeTab: (tab: ActivityBarTab) => void;
   changedFilesCount: number;
   commitsCount?: number;
+  envVariablesCount?: number;
   isSidebarOpen?: boolean;
 }
 
@@ -16,6 +17,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
   onChangeTab,
   changedFilesCount,
   commitsCount = 0,
+  envVariablesCount = 0,
   isSidebarOpen = true,
 }) => {
   const { isDark } = useTheme();
@@ -42,6 +44,17 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
       id: "search",
       label: "Search across Files",
       icon: <Search className="w-5 h-5" />,
+    },
+    {
+      id: "env",
+      label: "Environment Variables (.env)",
+      icon: <KeyRound className="w-5 h-5" />,
+      badge: envVariablesCount > 0 ? envVariablesCount : undefined,
+    },
+    {
+      id: "deploy",
+      label: "Cloud Deployments & Hosting (Coming Soon)",
+      icon: <Rocket className="w-5 h-5" />,
     },
   ];
 
@@ -108,4 +121,5 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
     </aside>
   );
 };
+
 export default ActivityBar;

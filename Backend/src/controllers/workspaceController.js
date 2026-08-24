@@ -2,11 +2,28 @@ import crypto from "crypto";
 import Project from "../models/Project.js";
 import ProjectFile from "../models/ProjectFile.js";
 import ProjectCommit from "../models/ProjectCommit.js";
-import { getTemplateFiles } from "../services/templateService.js";
+import ProjectTag from "../models/ProjectTag.js";
+import ProjectStash from "../models/ProjectStash.js";
 import {
   createCommit,
   switchBranch,
   mergeBranches,
+  finalizeMergeWithResolutions,
+  cherryPickCommit,
+  revertCommit,
+  saveStash,
+  getStashes,
+  applyStash,
+  popStash,
+  dropStash,
+  createTag,
+  getTags,
+  deleteTag,
+  getFileBlame,
+  getFileHistory,
+  compareSnapshots,
+  deleteBranch,
+  renameBranch,
   rollbackToCommit,
 } from "../services/vcsService.js";
 
@@ -201,7 +218,7 @@ export const detectLanguage = (filename) => {
 };
 
 /**
- * Get Workspace state and initialize template files if empty
+ * Get Workspace state and files
  */
 export const getWorkspace = async (req, res) => {
   try {
@@ -214,39 +231,9 @@ export const getWorkspace = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    let files = await ProjectFile.find({ projectId: project._id }).sort({
+    const files = await ProjectFile.find({ projectId: project._id }).sort({
       path: 1,
     });
-
-    // If workspace is empty, initialize default template files
-    if (files.length === 0) {
-      const templateFiles = getTemplateFiles(
-        project.template || "blank",
-        project.name
-      );
-
-      const docs = templateFiles.map((f) => ({
-        ...f,
-        projectId: project._id,
-        language: f.language || detectLanguage(f.name),
-        mimeType: detectMimeType(f.name),
-        size: computeContentSize(f.content || ""),
-      }));
-
-      files = await ProjectFile.insertMany(docs);
-
-      // Create Initial Commit
-      await createCommit({
-        projectId: project._id,
-        message: `Initial CloudForge commit: ${project.template || "blank"} project created`,
-        branch: project.currentBranch || "main",
-        author: {
-          name: req.user.name || "CloudForge Developer",
-          email: req.user.email || "developer@cloudforge.io",
-        },
-        files,
-      });
-    }
 
     const commits = await ProjectCommit.find({
       projectId: project._id,
@@ -635,7 +622,7 @@ export const deleteProjectFile = async (req, res) => {
 /* ========================================================================= */
 
 /**
- * Get Commits History
+ * Get Commits History (Supports branch filtering)
  */
 export const getProjectCommits = async (req, res) => {
   try {
@@ -648,14 +635,16 @@ export const getProjectCommits = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
+    const branch = req.query.branch || project.currentBranch || "main";
+
     const commits = await ProjectCommit.find({
       projectId: project._id,
-      branch: project.currentBranch || "main",
+      branch,
     })
       .sort({ createdAt: -1 })
-      .limit(60);
+      .limit(100);
 
-    return res.json({ commits });
+    return res.json({ commits, branch });
   } catch (error) {
     return res
       .status(500)
@@ -696,11 +685,11 @@ export const getProjectCommitDetails = async (req, res) => {
 };
 
 /**
- * Create a new Commit Snapshot in CloudForge VCS
+ * Create a new Commit Snapshot in CloudForge VCS (Supports selective staged staging)
  */
 export const createProjectCommit = async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, stagedFiles = null } = req.body;
 
     if (!message || !message.trim()) {
       return res.status(400).json({ message: "Commit message is required" });
@@ -726,6 +715,7 @@ export const createProjectCommit = async (req, res) => {
         email: req.user.email || "developer@cloudforge.io",
       },
       files: currentFiles,
+      stagedFiles,
     });
 
     project.updatedAt = new Date();
@@ -760,6 +750,7 @@ export const createOrSwitchBranch = async (req, res) => {
     const result = await switchBranch({
       projectId: req.params.id,
       branchName: cleanBranch,
+      createNew,
     });
 
     return res.json({
@@ -767,6 +758,7 @@ export const createOrSwitchBranch = async (req, res) => {
       currentBranch: result.project.currentBranch,
       branches: result.project.branches,
       files: result.files,
+      headCommit: result.headCommit,
     });
   } catch (error) {
     return res
@@ -776,11 +768,61 @@ export const createOrSwitchBranch = async (req, res) => {
 };
 
 /**
- * Merge Branches in CloudForge VCS
+ * Delete a Branch
+ */
+export const deleteProjectBranch = async (req, res) => {
+  try {
+    const { branchName } = req.params;
+    const result = await deleteBranch({
+      projectId: req.params.id,
+      branchName,
+    });
+
+    return res.json({
+      message: `Deleted branch '${branchName}'`,
+      branches: result.branches,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to delete branch", error: error.message });
+  }
+};
+
+/**
+ * Rename a Branch
+ */
+export const renameProjectBranch = async (req, res) => {
+  try {
+    const { oldName, newName } = req.body;
+    if (!oldName || !newName) {
+      return res.status(400).json({ message: "oldName and newName are required" });
+    }
+
+    const result = await renameBranch({
+      projectId: req.params.id,
+      oldBranchName: oldName,
+      newBranchName: newName,
+    });
+
+    return res.json({
+      message: `Renamed branch '${oldName}' to '${newName}'`,
+      currentBranch: result.currentBranch,
+      branches: result.branches,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to rename branch", error: error.message });
+  }
+};
+
+/**
+ * 3-Way Merge Branches in CloudForge VCS (With Conflict Detection)
  */
 export const mergeBranch = async (req, res) => {
   try {
-    const { sourceBranch, targetBranch } = req.body;
+    const { sourceBranch, targetBranch, dryRun = false } = req.body;
 
     if (!sourceBranch || !targetBranch) {
       return res.status(400).json({ message: "sourceBranch and targetBranch are required" });
@@ -790,14 +832,30 @@ export const mergeBranch = async (req, res) => {
       projectId: req.params.id,
       sourceBranch,
       targetBranch,
+      dryRun,
       author: {
         name: req.user.name || "CloudForge Developer",
         email: req.user.email || "developer@cloudforge.io",
       },
     });
 
+    if (result.hasConflicts) {
+      return res.status(409).json({
+        message: `Merge conflict detected between '${sourceBranch}' and '${targetBranch}'`,
+        hasConflicts: true,
+        conflictFiles: result.conflictFiles,
+        cleanMergedFiles: result.cleanMergedFiles,
+        sourceBranch,
+        targetBranch,
+        sourceHeadSha: result.sourceHeadSha,
+        targetHeadSha: result.targetHeadSha,
+        baseSha: result.baseSha,
+      });
+    }
+
     return res.json({
       message: `Successfully merged '${sourceBranch}' into '${targetBranch}'`,
+      hasConflicts: false,
       mergeCommit: result.mergeCommit,
       files: result.files,
     });
@@ -805,6 +863,344 @@ export const mergeBranch = async (req, res) => {
     return res
       .status(500)
       .json({ message: "Failed to merge branches", error: error.message });
+  }
+};
+
+/**
+ * Finalize Merge with Manual Resolutions
+ */
+export const finalizeMergeConflict = async (req, res) => {
+  try {
+    const { sourceBranch, targetBranch, resolvedFiles, customMessage } = req.body;
+
+    if (!sourceBranch || !targetBranch || !resolvedFiles) {
+      return res.status(400).json({ message: "sourceBranch, targetBranch, and resolvedFiles are required" });
+    }
+
+    const result = await finalizeMergeWithResolutions({
+      projectId: req.params.id,
+      sourceBranch,
+      targetBranch,
+      resolvedFiles,
+      customMessage,
+      author: {
+        name: req.user.name || "CloudForge Developer",
+        email: req.user.email || "developer@cloudforge.io",
+      },
+    });
+
+    return res.json({
+      message: `Conflict resolved & merged '${sourceBranch}' into '${targetBranch}'`,
+      mergeCommit: result.mergeCommit,
+      files: result.files,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to finalize merge resolution", error: error.message });
+  }
+};
+
+/**
+ * Cherry-Pick a Commit
+ */
+export const cherryPickCommitHandler = async (req, res) => {
+  try {
+    const { sha } = req.params;
+    const { targetBranch } = req.body;
+
+    const project = await Project.findOne({ _id: req.params.id, owner: req.user.id });
+    if (!project) return res.status(404).json({ message: "Project not found" });
+
+    const result = await cherryPickCommit({
+      projectId: project._id,
+      sha,
+      targetBranch: targetBranch || project.currentBranch || "main",
+      author: {
+        name: req.user.name || "CloudForge Developer",
+        email: req.user.email || "developer@cloudforge.io",
+      },
+    });
+
+    return res.json({
+      message: `Successfully cherry-picked commit ${sha.substring(0, 7)}`,
+      cherryPickCommit: result.cherryPickCommit,
+      files: result.files,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to cherry-pick commit", error: error.message });
+  }
+};
+
+/**
+ * Revert a Commit
+ */
+export const revertCommitHandler = async (req, res) => {
+  try {
+    const { sha } = req.params;
+    const { targetBranch } = req.body;
+
+    const project = await Project.findOne({ _id: req.params.id, owner: req.user.id });
+    if (!project) return res.status(404).json({ message: "Project not found" });
+
+    const result = await revertCommit({
+      projectId: project._id,
+      sha,
+      targetBranch: targetBranch || project.currentBranch || "main",
+      author: {
+        name: req.user.name || "CloudForge Developer",
+        email: req.user.email || "developer@cloudforge.io",
+      },
+    });
+
+    return res.json({
+      message: `Successfully reverted commit ${sha.substring(0, 7)}`,
+      revertedCommit: result.revertedCommit,
+      files: result.files,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to revert commit", error: error.message });
+  }
+};
+
+/**
+ * Save Workspace Stash
+ */
+export const saveProjectStash = async (req, res) => {
+  try {
+    const { message } = req.body;
+    const project = await Project.findOne({ _id: req.params.id, owner: req.user.id });
+    if (!project) return res.status(404).json({ message: "Project not found" });
+
+    const currentFiles = await ProjectFile.find({ projectId: project._id });
+
+    const result = await saveStash({
+      projectId: project._id,
+      branch: project.currentBranch || "main",
+      message,
+      author: {
+        name: req.user.name || "CloudForge Developer",
+        email: req.user.email || "developer@cloudforge.io",
+      },
+      files: currentFiles,
+    });
+
+    return res.json({
+      message: "Working tree stashed successfully",
+      stash: result.stash,
+      files: result.files,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to save stash", error: error.message });
+  }
+};
+
+/**
+ * Get All Stashes
+ */
+export const getProjectStashes = async (req, res) => {
+  try {
+    const stashes = await getStashes({ projectId: req.params.id });
+    return res.json({ stashes });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to fetch stashes", error: error.message });
+  }
+};
+
+/**
+ * Apply Stash
+ */
+export const applyProjectStash = async (req, res) => {
+  try {
+    const { stashId } = req.params;
+    const result = await applyStash({ projectId: req.params.id, stashId });
+    return res.json({
+      message: "Stash applied successfully",
+      stash: result.stash,
+      files: result.files,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to apply stash", error: error.message });
+  }
+};
+
+/**
+ * Pop Stash
+ */
+export const popProjectStash = async (req, res) => {
+  try {
+    const { stashId } = req.params;
+    const result = await popStash({ projectId: req.params.id, stashId });
+    return res.json({
+      message: "Stash popped and restored successfully",
+      stash: result.stash,
+      files: result.files,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to pop stash", error: error.message });
+  }
+};
+
+/**
+ * Drop Stash
+ */
+export const dropProjectStash = async (req, res) => {
+  try {
+    const { stashId } = req.params;
+    await dropStash({ projectId: req.params.id, stashId });
+    return res.json({ message: "Stash dropped successfully" });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to drop stash", error: error.message });
+  }
+};
+
+/**
+ * Create Tag
+ */
+export const createProjectTag = async (req, res) => {
+  try {
+    const { name, sha, message } = req.body;
+    if (!name || !sha) {
+      return res.status(400).json({ message: "name and sha are required" });
+    }
+
+    const tag = await createTag({
+      projectId: req.params.id,
+      name,
+      sha,
+      message,
+      author: {
+        name: req.user.name || "CloudForge Developer",
+        email: req.user.email || "developer@cloudforge.io",
+      },
+    });
+
+    return res.status(201).json({ message: `Tag '${tag.name}' created`, tag });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to create tag", error: error.message });
+  }
+};
+
+/**
+ * Get Tags
+ */
+export const getProjectTags = async (req, res) => {
+  try {
+    const tags = await getTags({ projectId: req.params.id });
+    return res.json({ tags });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to fetch tags", error: error.message });
+  }
+};
+
+/**
+ * Delete Tag
+ */
+export const deleteProjectTag = async (req, res) => {
+  try {
+    const { name } = req.params;
+    await deleteTag({ projectId: req.params.id, name });
+    return res.json({ message: `Tag '${name}' deleted` });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to delete tag", error: error.message });
+  }
+};
+
+/**
+ * Get File Blame
+ */
+export const getProjectFileBlame = async (req, res) => {
+  try {
+    const { path } = req.query;
+    if (!path) {
+      return res.status(400).json({ message: "File path query parameter is required" });
+    }
+
+    const project = await Project.findOne({ _id: req.params.id, owner: req.user.id });
+    if (!project) return res.status(404).json({ message: "Project not found" });
+
+    const blame = await getFileBlame({
+      projectId: project._id,
+      path,
+      branch: project.currentBranch || "main",
+    });
+
+    return res.json({ path, blame });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to compute file blame", error: error.message });
+  }
+};
+
+/**
+ * Get File Commit History
+ */
+export const getProjectFileHistory = async (req, res) => {
+  try {
+    const { path } = req.query;
+    if (!path) {
+      return res.status(400).json({ message: "File path query parameter is required" });
+    }
+
+    const project = await Project.findOne({ _id: req.params.id, owner: req.user.id });
+    if (!project) return res.status(404).json({ message: "Project not found" });
+
+    const history = await getFileHistory({
+      projectId: project._id,
+      path,
+      branch: project.currentBranch || "main",
+    });
+
+    return res.json({ path, history });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to fetch file history", error: error.message });
+  }
+};
+
+/**
+ * Compare Arbitrary Branches or Commits
+ */
+export const compareProjectSnapshots = async (req, res) => {
+  try {
+    const { base, head } = req.query;
+    if (!base || !head) {
+      return res.status(400).json({ message: "base and head query parameters are required" });
+    }
+
+    const comparison = await compareSnapshots({
+      projectId: req.params.id,
+      base,
+      head,
+    });
+
+    return res.json({ comparison });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to compare snapshots", error: error.message });
   }
 };
 
@@ -837,71 +1233,5 @@ export const rollbackCommit = async (req, res) => {
     return res
       .status(500)
       .json({ message: "Failed to rollback commit", error: error.message });
-  }
-};
-
-/**
- * Reset Workspace to Template preset
- */
-export const resetWorkspaceTemplate = async (req, res) => {
-  try {
-    const { template } = req.body;
-    if (!template) {
-      return res
-        .status(400)
-        .json({ message: "Template preset name is required" });
-    }
-
-    const project = await Project.findOne({
-      _id: req.params.id,
-      owner: req.user.id,
-    });
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    await ProjectFile.deleteMany({ projectId: project._id });
-
-    const templateFiles = getTemplateFiles(template, project.name);
-    const docs = templateFiles.map((f) => ({
-      ...f,
-      projectId: project._id,
-      size: Buffer.byteLength(f.content || "", "utf8"),
-    }));
-    const newFiles = await ProjectFile.insertMany(docs);
-
-    const initialCommit = await createCommit({
-      projectId: project._id,
-      message: `Reset workspace to '${template}' preset`,
-      branch: project.currentBranch || "main",
-      author: {
-        name: req.user.name || "CloudForge Developer",
-        email: req.user.email || "developer@cloudforge.io",
-      },
-      files: newFiles,
-    });
-
-    project.template = template;
-    await project.save();
-
-    const commits = await ProjectCommit.find({
-      projectId: project._id,
-      branch: project.currentBranch || "main",
-    })
-      .sort({ createdAt: -1 })
-      .limit(30);
-
-    return res.json({
-      message: `Workspace reset to ${template} template successfully`,
-      project,
-      files: newFiles,
-      commits,
-    });
-  } catch (error) {
-    console.error("Reset template error:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to reset template", error: error.message });
   }
 };

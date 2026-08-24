@@ -26,6 +26,12 @@ import { StatusBar } from "../components/workspace/StatusBar";
 import { BranchManagerModal } from "../components/workspace/BranchManagerModal";
 import { CommitDetailsModal } from "../components/workspace/CommitDetailsModal";
 import { UnsavedChangesModal } from "../components/workspace/UnsavedChangesModal";
+import { ConflictResolverModal } from "../components/workspace/ConflictResolverModal";
+import { StashModal } from "../components/workspace/StashModal";
+import { CommitCompareModal } from "../components/workspace/CommitCompareModal";
+import { FileBlameModal } from "../components/workspace/FileBlameModal";
+import { EnvVariablesPanel } from "../components/workspace/EnvVariablesPanel";
+import { DeploymentPanel } from "../components/workspace/DeploymentPanel";
 import { vcsService } from "../services/vcsService";
 
 export default function ProjectView() {
@@ -59,7 +65,7 @@ export default function ProjectView() {
   // Dynamic Sidebar Resizing (VS Code style)
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const saved = localStorage.getItem("cf_sidebar_width");
-    return saved ? parseInt(saved, 10) : 280;
+    return saved ? Math.max(200, parseInt(saved, 10)) : 290;
   });
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
 
@@ -77,7 +83,7 @@ export default function ProjectView() {
       if (!isResizingSidebar) return;
       // 48px is the width of the fixed ActivityBar
       const activityBarWidth = 48;
-      const newWidth = Math.max(180, Math.min(650, e.clientX - activityBarWidth));
+      const newWidth = Math.max(200, Math.min(650, e.clientX - activityBarWidth));
       setSidebarWidth(newWidth);
     };
 
@@ -118,6 +124,17 @@ export default function ProjectView() {
   >([]);
 
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
+  const [isStashModalOpen, setIsStashModalOpen] = useState(false);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [conflictModalData, setConflictModalData] = useState<{
+    sourceBranch: string;
+    targetBranch: string;
+    conflictFiles: any[];
+  } | null>(null);
+  const [fileBlameTarget, setFileBlameTarget] = useState<{
+    path: string;
+    name: string;
+  } | null>(null);
   const [selectedCommit, setSelectedCommit] = useState<GitCommit | null>(null);
   const [diffTarget, setDiffTarget] = useState<{
     filename: string;
@@ -675,7 +692,11 @@ export default function ProjectView() {
   const executeCommit = async (message: string, stagedOnly: boolean) => {
     if (!id) return;
     try {
-      const newCommit = await vcsService.createCommit(id, message);
+      const stagedList = stagedOnly
+        ? changedFiles.filter((c) => c.staged).map((c) => c.file)
+        : null;
+
+      const newCommit = await vcsService.createCommit(id, message, stagedList);
       setCommits((prev) => [newCommit, ...prev]);
 
       const committedIds = new Set(
@@ -729,6 +750,20 @@ export default function ProjectView() {
     await executeCommit(message, stagedOnly);
   };
 
+  const handleDiscardAll = () => {
+    if (!window.confirm("Discard all uncommitted changes in the entire workspace?")) return;
+    setTabs((prev) =>
+      prev.map((t) => ({
+        ...t,
+        content: t.initialContent,
+        isDirty: false,
+      }))
+    );
+    setChangedFiles([]);
+    setDiffTarget(null);
+    showSuccess("Discarded all workspace modifications.");
+  };
+
   const handleBranchSwitched = (
     newBranch: string,
     newBranches: string[],
@@ -736,7 +771,9 @@ export default function ProjectView() {
   ) => {
     setCurrentBranch(newBranch);
     setBranches(newBranches);
-    setFiles(newFiles);
+    if (newFiles && newFiles.length > 0) {
+      setFiles(newFiles);
+    }
     setTabs([]);
     setActiveTabId(null);
     setChangedFiles([]);
@@ -752,6 +789,76 @@ export default function ProjectView() {
     setChangedFiles([]);
     setDiffTarget(null);
     showSuccess(`Branch merge complete! Created merge commit ${mergeCommit.sha.substring(0, 7)}`);
+  };
+
+  const handleConflictDetected = (conflictData: any) => {
+    setConflictModalData({
+      sourceBranch: conflictData.sourceBranch,
+      targetBranch: conflictData.targetBranch,
+      conflictFiles: conflictData.conflictFiles || [],
+    });
+  };
+
+  const handleFinalizeConflictMerge = async (resolvedFiles: any[]) => {
+    if (!id || !conflictModalData) return;
+    const res = await vcsService.finalizeMerge(
+      id,
+      conflictModalData.sourceBranch,
+      conflictModalData.targetBranch,
+      resolvedFiles
+    );
+    setConflictModalData(null);
+    handleMergeComplete(res.mergeCommit, res.files);
+  };
+
+  const handleStashSaved = (newFiles: WorkspaceFile[]) => {
+    if (newFiles && newFiles.length > 0) {
+      setFiles(newFiles);
+    }
+    setTabs([]);
+    setActiveTabId(null);
+    setChangedFiles([]);
+    setDiffTarget(null);
+    showSuccess("Workspace stashed cleanly.");
+  };
+
+  const handleStashApplied = (newFiles: WorkspaceFile[]) => {
+    if (newFiles && newFiles.length > 0) {
+      setFiles(newFiles);
+    }
+    setTabs([]);
+    setActiveTabId(null);
+    setChangedFiles([]);
+    setDiffTarget(null);
+    showSuccess("Stash applied to workspace.");
+  };
+
+  const handleCherryPickComplete = (newFiles: WorkspaceFile[], newCommit: GitCommit) => {
+    setCommits((prev) => [newCommit, ...prev]);
+    if (newFiles && newFiles.length > 0) {
+      setFiles(newFiles);
+    }
+    setTabs([]);
+    setActiveTabId(null);
+    setChangedFiles([]);
+    setDiffTarget(null);
+    showSuccess(`Cherry-picked commit ${newCommit.sha.substring(0, 7)} successfully`);
+  };
+
+  const handleRevertComplete = (newFiles: WorkspaceFile[], newCommit: GitCommit) => {
+    setCommits((prev) => [newCommit, ...prev]);
+    if (newFiles && newFiles.length > 0) {
+      setFiles(newFiles);
+    }
+    setTabs([]);
+    setActiveTabId(null);
+    setChangedFiles([]);
+    setDiffTarget(null);
+    showSuccess(`Reverted commit ${newCommit.sha.substring(0, 7)} successfully`);
+  };
+
+  const handleOpenFileBlame = (filePath: string, fileName: string) => {
+    setFileBlameTarget({ path: filePath, name: fileName });
   };
 
   const handleRollbackComplete = (newFiles: WorkspaceFile[], newCommit: GitCommit) => {
@@ -817,6 +924,7 @@ export default function ProjectView() {
             isSidebarOpen={isSidebarOpen}
             changedFilesCount={changedFiles.length}
             commitsCount={commits.length}
+            envVariablesCount={project?.envVariables?.length || 0}
           />
 
           <div
@@ -824,88 +932,102 @@ export default function ProjectView() {
               width: isSidebarOpen ? `${sidebarWidth}px` : "0px",
             }}
             className={`h-full border-r shrink-0 overflow-hidden flex flex-col ${
-              isResizingSidebar ? "" : "transition-all duration-150 ease-in-out"
+              isResizingSidebar ? "" : "transition-all duration-200 ease-in-out"
             } ${
               isSidebarOpen ? "opacity-100" : "w-0 border-r-0 opacity-0 pointer-events-none"
             } ${
               isDark ? "border-neutral-800 bg-neutral-950" : "border-neutral-200 bg-neutral-50"
             }`}
           >
-            {activeActivityTab === "explorer" && (
-              <FileExplorer
-                files={files}
-                activeFileId={activeTabId}
-                onSelectFile={handleSelectFile}
-                onCreateFile={handleCreateFile}
-                onCreateFolder={handleCreateFolder}
-                onRenameFile={handleRenameFile}
-                onDeleteFile={handleDeleteFile}
-                onUploadFiles={handleUploadFiles}
-                onDownloadFile={handleDownloadFile}
-                onRefreshFiles={loadWorkspace}
-                projectName={project.name}
-                onCollapse={() => setIsSidebarOpen(false)}
-              />
-            )}
+            <div
+              style={{ width: `${sidebarWidth}px` }}
+              className="h-full w-full min-w-0 max-w-full flex flex-col overflow-hidden shrink-0"
+            >
+              {activeActivityTab === "explorer" && (
+                <FileExplorer
+                  files={files}
+                  activeFileId={activeTabId}
+                  onSelectFile={handleSelectFile}
+                  onCreateFile={handleCreateFile}
+                  onCreateFolder={handleCreateFolder}
+                  onRenameFile={handleRenameFile}
+                  onDeleteFile={handleDeleteFile}
+                  onUploadFiles={handleUploadFiles}
+                  onDownloadFile={handleDownloadFile}
+                  onRefreshFiles={loadWorkspace}
+                  projectName={project.name}
+                  onCollapse={() => setIsSidebarOpen(false)}
+                  onOpenFileBlame={handleOpenFileBlame}
+                />
+              )}
 
-            {activeActivityTab === "sourceControl" && (
-              <SourceControlPanel
-                project={project}
-                changedFiles={changedFiles}
-                currentBranch={currentBranch}
-                branches={branches}
-                onCommit={handleCommit}
-                onStageFile={handleStageFile}
-                onUnstageFile={handleUnstageFile}
-                onStageAll={handleStageAll}
-                onUnstageAll={handleUnstageAll}
-                onDiscardChange={handleDiscardChange}
-                onInspectDiff={handleInspectDiff}
-                onOpenBranchManager={() => setIsBranchModalOpen(true)}
-              />
-            )}
+              {activeActivityTab === "sourceControl" && (
+                <SourceControlPanel
+                  project={project}
+                  changedFiles={changedFiles}
+                  currentBranch={currentBranch}
+                  branches={branches}
+                  onCommit={handleCommit}
+                  onStageFile={handleStageFile}
+                  onUnstageFile={handleUnstageFile}
+                  onStageAll={handleStageAll}
+                  onUnstageAll={handleUnstageAll}
+                  onDiscardChange={handleDiscardChange}
+                  onDiscardAll={handleDiscardAll}
+                  onInspectDiff={handleInspectDiff}
+                  onOpenBranchManager={() => setIsBranchModalOpen(true)}
+                  onOpenStashModal={() => setIsStashModalOpen(true)}
+                  onOpenCompareModal={() => setIsCompareModalOpen(true)}
+                  onOpenFileBlame={handleOpenFileBlame}
+                />
+              )}
 
-            {activeActivityTab === "history" && (
-              <VCSHistoryPanel
-                projectId={project._id}
-                commits={commits}
-                currentBranch={currentBranch}
-                onCommitSelected={(c) => setSelectedCommit(c)}
-                onRollbackComplete={handleRollbackComplete}
-              />
-            )}
+              {activeActivityTab === "history" && (
+                <VCSHistoryPanel
+                  projectId={project._id}
+                  commits={commits}
+                  currentBranch={currentBranch}
+                  onCommitSelected={(c) => setSelectedCommit(c)}
+                  onRollbackComplete={handleRollbackComplete}
+                  onCherryPickComplete={handleCherryPickComplete}
+                  onRevertComplete={handleRevertComplete}
+                />
+              )}
 
-            {activeActivityTab === "search" && (
-              <SearchPanel
-                files={files}
-                onSelectMatch={(file) => handleSelectFile(file)}
-              />
-            )}
+              {activeActivityTab === "search" && (
+                <SearchPanel
+                  files={files}
+                  onSelectMatch={(file) => handleSelectFile(file)}
+                />
+              )}
 
-            {activeActivityTab === "settings" && (
-              <ProjectSettingsPanel
-                project={project}
-                filesCount={files.filter((f) => f.type === "file").length}
-                commitsCount={commits.length}
-                onUpdateProject={(updated) => setProject(updated)}
-                onResetTemplate={(updatedProj, newFiles, newCommits) => {
-                  setProject(updatedProj);
-                  setFiles(newFiles);
-                  setCommits(newCommits);
-                  setTabs([]);
-                  setActiveTabId(null);
-                  setChangedFiles([]);
-                  setDiffTarget(null);
-                }}
-              />
-            )}
+              {activeActivityTab === "env" && (
+                <EnvVariablesPanel
+                  project={project}
+                  onUpdateProject={(updated) => setProject(updated)}
+                />
+              )}
+
+              {activeActivityTab === "deploy" && (
+                <DeploymentPanel projectName={project?.name} />
+              )}
+
+              {activeActivityTab === "settings" && (
+                <ProjectSettingsPanel
+                  project={project}
+                  filesCount={files.filter((f) => f.type === "file").length}
+                  commitsCount={commits.length}
+                  onUpdateProject={(updated) => setProject(updated)}
+                />
+              )}
+            </div>
           </div>
 
           {/* VS Code Interactive Drag Resize Handle */}
           {isSidebarOpen && (
             <div
               onMouseDown={handleMouseDownResize}
-              onDoubleClick={() => setSidebarWidth(280)}
+              onDoubleClick={() => setSidebarWidth(290)}
               className={`w-1 cursor-col-resize select-none h-full shrink-0 relative z-20 group transition-colors ${
                 isResizingSidebar
                   ? "bg-blue-500 w-1.5 shadow-xs"
@@ -972,12 +1094,52 @@ export default function ProjectView() {
         branches={branches}
         onBranchSwitched={handleBranchSwitched}
         onMergeComplete={handleMergeComplete}
+        onConflictDetected={handleConflictDetected}
       />
 
       <CommitDetailsModal
         commit={selectedCommit}
         onClose={() => setSelectedCommit(null)}
       />
+
+      <StashModal
+        isOpen={isStashModalOpen}
+        onClose={() => setIsStashModalOpen(false)}
+        projectId={project._id}
+        currentBranch={currentBranch}
+        hasDirtyFiles={changedFiles.length > 0}
+        onStashSaved={handleStashSaved}
+        onStashApplied={handleStashApplied}
+      />
+
+      <CommitCompareModal
+        isOpen={isCompareModalOpen}
+        onClose={() => setIsCompareModalOpen(false)}
+        projectId={project._id}
+        branches={branches}
+        initialBase={currentBranch}
+      />
+
+      {fileBlameTarget && (
+        <FileBlameModal
+          isOpen={Boolean(fileBlameTarget)}
+          onClose={() => setFileBlameTarget(null)}
+          projectId={project._id}
+          filePath={fileBlameTarget.path}
+          fileName={fileBlameTarget.name}
+        />
+      )}
+
+      {conflictModalData && (
+        <ConflictResolverModal
+          isOpen={Boolean(conflictModalData)}
+          onClose={() => setConflictModalData(null)}
+          sourceBranch={conflictModalData.sourceBranch}
+          targetBranch={conflictModalData.targetBranch}
+          conflictFiles={conflictModalData.conflictFiles}
+          onFinalizeMerge={handleFinalizeConflictMerge}
+        />
+      )}
 
       {closeTabPending && (
         <UnsavedChangesModal

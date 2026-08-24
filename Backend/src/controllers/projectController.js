@@ -2,7 +2,7 @@ import Project from "../models/Project.js";
 
 export const createProject = async (req, res) => {
   try {
-    const { name, description, template } = req.body;
+    const { name, description, envVariables = [] } = req.body;
 
     if (!name) {
       return res.status(400).json({
@@ -10,11 +10,13 @@ export const createProject = async (req, res) => {
       });
     }
 
+    const userId = req.user._id || req.user.id;
+
     const project = await Project.create({
       name,
       description,
-      template: template || "blank",
-      owner: req.user.id,
+      owner: userId,
+      envVariables,
     });
 
     res.status(201).json({
@@ -31,8 +33,9 @@ export const createProject = async (req, res) => {
 
 export const getProjects = async (req, res) => {
   try {
+    const userId = req.user._id || req.user.id;
     const projects = await Project.find({
-      owner: req.user.id,
+      owner: userId,
     }).sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -48,9 +51,10 @@ export const getProjects = async (req, res) => {
 
 export const getProject = async (req, res) => {
   try {
+    const userId = req.user._id || req.user.id;
     const project = await Project.findOne({
       _id: req.params.id,
-      owner: req.user.id,
+      owner: userId,
     });
 
     if (!project) {
@@ -72,17 +76,18 @@ export const getProject = async (req, res) => {
 
 export const updateProject = async (req, res) => {
   try {
-    const { name, description, template } = req.body;
+    const { name, description, envVariables } = req.body;
+    const userId = req.user._id || req.user.id;
 
     const updateFields = {};
     if (name !== undefined) updateFields.name = name;
     if (description !== undefined) updateFields.description = description;
-    if (template !== undefined) updateFields.template = template;
+    if (envVariables !== undefined) updateFields.envVariables = envVariables;
 
     const project = await Project.findOneAndUpdate(
       {
         _id: req.params.id,
-        owner: req.user.id,
+        owner: userId,
       },
       updateFields,
       {
@@ -109,11 +114,81 @@ export const updateProject = async (req, res) => {
   }
 };
 
+export const getProjectEnv = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const project = await Project.findOne({
+      _id: req.params.id,
+      owner: userId,
+    });
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    res.status(200).json({
+      envVariables: project.envVariables || [],
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to fetch environment variables",
+      error: error.message,
+    });
+  }
+};
+
+export const updateProjectEnv = async (req, res) => {
+  try {
+    const { envVariables } = req.body;
+
+    if (!Array.isArray(envVariables)) {
+      return res.status(400).json({ message: "envVariables must be an array" });
+    }
+
+    const userId = req.user._id || req.user.id;
+
+    const cleanVars = envVariables
+      .filter((v) => v && typeof v.key === "string" && v.key.trim().length > 0)
+      .map((v) => ({
+        key: v.key.trim().toUpperCase().replace(/[^A-Z0-9_]/g, "_"),
+        value: String(v.value !== undefined && v.value !== null ? v.value : ""),
+      }));
+
+    const project = await Project.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        owner: userId,
+      },
+      { $set: { envVariables: cleanVars } },
+      {
+        returnDocument: "after",
+        runValidators: true,
+      }
+    );
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    res.status(200).json({
+      message: "Environment variables updated successfully",
+      envVariables: project.envVariables || [],
+      project,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to update environment variables",
+      error: error.message,
+    });
+  }
+};
+
 export const deleteProject = async (req, res) => {
   try {
+    const userId = req.user._id || req.user.id;
     const project = await Project.findOneAndDelete({
       _id: req.params.id,
-      owner: req.user.id,
+      owner: userId,
     });
 
     if (!project) {

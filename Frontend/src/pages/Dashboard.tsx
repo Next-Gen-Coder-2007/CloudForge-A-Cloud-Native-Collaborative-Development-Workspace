@@ -15,7 +15,7 @@ interface Project {
   _id: string;
   name: string;
   language?: string;
-  template?: string;
+  description?: string;
   updatedAt: string;
 }
 
@@ -186,7 +186,7 @@ function Dashboard() {
                           {project.name}
                         </p>
                         <p className={`text-[11px] mt-0.5 ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
-                          {project.template || "Custom"}
+                          {project.description || "Cloud Workspace"}
                         </p>
                       </div>
                     </div>

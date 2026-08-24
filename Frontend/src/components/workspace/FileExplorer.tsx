@@ -16,6 +16,7 @@ import {
   Download,
   X,
   AlertTriangle,
+  FileText,
 } from "lucide-react";
 import { FileIcon } from "./FileIcon";
 import { FileUploadModal } from "./FileUploadModal";
@@ -35,6 +36,7 @@ interface FileExplorerProps {
   onRefreshFiles: () => Promise<void>;
   projectName: string;
   onCollapse?: () => void;
+  onOpenFileBlame?: (filePath: string, fileName: string) => void;
 }
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({
@@ -50,6 +52,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   onRefreshFiles,
   projectName,
   onCollapse,
+  onOpenFileBlame,
 }) => {
   const { isDark } = useTheme();
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
@@ -392,6 +395,16 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                 </button>
               )}
 
+              {node.file && onOpenFileBlame && (
+                <button
+                  onClick={() => onOpenFileBlame(node.file!.path, node.file!.name)}
+                  title="View Git Blame & History"
+                  className={`p-1 rounded ${isDark ? "hover:text-white hover:bg-neutral-800" : "hover:text-black hover:bg-neutral-200"}`}
+                >
+                  <FileText className="w-3 h-3 text-purple-400" />
+                </button>
+              )}
+
               {node.file && (
                 <button
                   onClick={() => handleStartRename(node.file!)}
@@ -465,8 +478,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   };
 
   return (
-    <div className={`h-full flex flex-col select-none overflow-hidden border-r transition-colors duration-150 ${
-      isDark ? "bg-neutral-950 text-neutral-300 border-neutral-800" : "bg-white text-neutral-700 border-neutral-200"
+    <div className={`h-full w-full flex flex-col select-none overflow-hidden transition-colors duration-150 ${
+      isDark ? "bg-neutral-950 text-neutral-300" : "bg-white text-neutral-700"
     }`}>
       <input
         ref={fileInputRef}
@@ -476,14 +489,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         className="hidden"
       />
 
-      <div className={`px-3 py-2.5 flex items-center justify-between border-b ${
+      <div className={`px-2.5 py-2 flex items-center justify-between border-b shrink-0 ${
         isDark ? "bg-neutral-950 border-neutral-800" : "bg-neutral-50/70 border-neutral-200"
       }`}>
-        <span className={`text-[11px] font-bold tracking-wider uppercase ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
+        <span className={`text-[11px] font-bold tracking-wider uppercase truncate shrink min-w-0 mr-1 ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
           Explorer
         </span>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 shrink-0">
           <button
             onClick={() => handleStartCreate("file", "")}
             className={`p-1 rounded transition-colors cursor-pointer ${
@@ -542,7 +555,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               className={`p-1 rounded transition-colors cursor-pointer ${
                 isDark ? "text-neutral-400 hover:text-white hover:bg-neutral-800" : "text-neutral-500 hover:text-black hover:bg-neutral-200"
               }`}
-              title="Minimize Sidebar"
+              title="Collapse Sidebar"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
@@ -550,7 +563,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         </div>
       </div>
 
-      <div className={`px-3 py-1.5 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider border-b ${
+      <div className={`px-2.5 py-1.5 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider border-b shrink-0 ${
         isDark ? "bg-black border-neutral-800 text-neutral-300" : "bg-neutral-100/70 border-neutral-200 text-neutral-700"
       }`}>
         <span className="truncate">{projectName}</span>
