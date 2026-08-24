@@ -22,7 +22,6 @@ import {
   createOrSwitchBranch,
   mergeBranch,
   rollbackCommit,
-  resetWorkspaceTemplate,
 } from "../controllers/workspaceController.js";
 
 import { protect } from "../middleware/authMiddleware.js";
@@ -67,8 +66,5 @@ router.post("/:id/workspace/branches", createOrSwitchBranch);
 router.post("/:id/git/branches", createOrSwitchBranch);
 router.post("/:id/vcs/merge", mergeBranch);
 router.post("/:id/vcs/rollback/:sha", rollbackCommit);
-
-// Template reset
-router.post("/:id/workspace/reset-template", resetWorkspaceTemplate);
 
 export default router;

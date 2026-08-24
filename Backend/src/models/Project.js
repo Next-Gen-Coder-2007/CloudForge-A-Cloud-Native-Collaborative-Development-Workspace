@@ -21,11 +21,6 @@ const projectSchema = new mongoose.Schema(
       index: true,
     },
 
-    template: {
-      type: String,
-      enum: ["react", "nodejs", "python", "html-css", "java", "go", "blank"],
-      default: "blank",
-    },
 
     currentBranch: {
       type: String,

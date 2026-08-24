@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   Save,
-  RotateCcw,
   Trash2,
   GitBranch,
   Cloud,
@@ -9,7 +8,6 @@ import {
 import API_URL from "../../config/api";
 import { useAlert } from "../../hooks/useAlert";
 import { type Project } from "../../types/project";
-import { type WorkspaceFile, type GitCommit } from "../../types/workspace";
 import { useTheme } from "../../context/ThemeContext";
 
 interface ProjectSettingsPanelProps {
@@ -17,11 +15,6 @@ interface ProjectSettingsPanelProps {
   filesCount: number;
   commitsCount: number;
   onUpdateProject: (project: Project) => void;
-  onResetTemplate: (
-    project: Project,
-    files: WorkspaceFile[],
-    commits: GitCommit[]
-  ) => void;
 }
 
 export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
@@ -29,15 +22,12 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
   filesCount,
   commitsCount,
   onUpdateProject,
-  onResetTemplate,
 }) => {
   const { isDark } = useTheme();
   const { showError, showSuccess } = useAlert();
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description || "");
-  const [template, setTemplate] = useState(project.template || "blank");
   const [isSaving, setIsSaving] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -53,7 +43,6 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim(),
-          template,
         }),
       });
 
@@ -68,41 +57,6 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
       showError(err.message || "Failed to update project settings");
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleResetTemplate = async () => {
-    if (
-      !window.confirm(
-        `Are you sure you want to reset workspace to "${template}" template? This will replace existing workspace files with template starter files.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setIsResetting(true);
-      const res = await fetch(
-        `${API_URL}/api/projects/${project._id}/reset-template`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ template }),
-        }
-      );
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to reset template");
-      }
-
-      onResetTemplate(data.project, data.files, data.commits || []);
-      showSuccess(`Workspace reset to starter template "${template}"`);
-    } catch (err: any) {
-      showError(err.message || "Failed to reset workspace template");
-    } finally {
-      setIsResetting(false);
     }
   };
 
@@ -192,30 +146,11 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={2}
+              rows={3}
               className={`w-full px-3 py-1.5 border rounded-lg outline-none focus:border-blue-500 resize-none ${
                 isDark ? "bg-neutral-900 border-neutral-700 text-white" : "bg-white border-neutral-300 text-black"
               }`}
             />
-          </div>
-
-          <div>
-            <label className={`block font-semibold mb-1 ${isDark ? "text-neutral-200" : "text-neutral-700"}`}>
-              Template Type
-            </label>
-            <select
-              value={template}
-              onChange={(e) => setTemplate(e.target.value)}
-              className={`w-full px-2.5 py-1.5 border rounded-lg outline-none focus:border-blue-500 ${
-                isDark ? "bg-neutral-900 border-neutral-700 text-white" : "bg-white border-neutral-300 text-black"
-              }`}
-            >
-              <option value="blank">Blank Project</option>
-              <option value="react">React Application (Vite + TSX)</option>
-              <option value="nodejs">Node.js Express Backend</option>
-              <option value="python">Python 3 Application</option>
-              <option value="html-css">HTML5 & CSS3 Webpage</option>
-            </select>
           </div>
 
           <button
@@ -247,31 +182,6 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
               {project.currentBranch || "main"}
             </span>
           </div>
-        </div>
-
-        <div className={`p-3.5 rounded-xl border space-y-2.5 shadow-2xs ${
-          isDark ? "bg-black border-neutral-800" : "bg-white border-neutral-200"
-        }`}>
-          <div className="flex items-center justify-between">
-            <span className={`font-semibold ${isDark ? "text-white" : "text-black"}`}>Template Starter Re-seed</span>
-            <RotateCcw className="w-3.5 h-3.5 text-neutral-400" />
-          </div>
-          <p className={`text-[11px] leading-relaxed ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
-            Reset this workspace to default template starter files for <strong>{template}</strong>.
-          </p>
-          <button
-            type="button"
-            onClick={handleResetTemplate}
-            disabled={isResetting}
-            className={`w-full py-1.5 rounded-lg font-semibold text-[11px] flex items-center justify-center gap-1.5 transition-colors border cursor-pointer ${
-              isDark
-                ? "bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
-                : "bg-neutral-100 hover:bg-neutral-200 text-black border-neutral-200"
-            }`}
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-blue-500" />
-            <span>{isResetting ? "Re-seeding..." : "Re-seed Starter Template"}</span>
-          </button>
         </div>
 
         <div className={`p-3 rounded-xl border space-y-2 text-[11px] font-mono shadow-2xs ${

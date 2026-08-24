@@ -2,7 +2,6 @@ import crypto from "crypto";
 import Project from "../models/Project.js";
 import ProjectFile from "../models/ProjectFile.js";
 import ProjectCommit from "../models/ProjectCommit.js";
-import { getTemplateFiles } from "../services/templateService.js";
 import {
   createCommit,
   switchBranch,
@@ -201,7 +200,7 @@ export const detectLanguage = (filename) => {
 };
 
 /**
- * Get Workspace state and initialize template files if empty
+ * Get Workspace state and files
  */
 export const getWorkspace = async (req, res) => {
   try {
@@ -214,39 +213,9 @@ export const getWorkspace = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    let files = await ProjectFile.find({ projectId: project._id }).sort({
+    const files = await ProjectFile.find({ projectId: project._id }).sort({
       path: 1,
     });
-
-    // If workspace is empty, initialize default template files
-    if (files.length === 0) {
-      const templateFiles = getTemplateFiles(
-        project.template || "blank",
-        project.name
-      );
-
-      const docs = templateFiles.map((f) => ({
-        ...f,
-        projectId: project._id,
-        language: f.language || detectLanguage(f.name),
-        mimeType: detectMimeType(f.name),
-        size: computeContentSize(f.content || ""),
-      }));
-
-      files = await ProjectFile.insertMany(docs);
-
-      // Create Initial Commit
-      await createCommit({
-        projectId: project._id,
-        message: `Initial CloudForge commit: ${project.template || "blank"} project created`,
-        branch: project.currentBranch || "main",
-        author: {
-          name: req.user.name || "CloudForge Developer",
-          email: req.user.email || "developer@cloudforge.io",
-        },
-        files,
-      });
-    }
 
     const commits = await ProjectCommit.find({
       projectId: project._id,
@@ -837,71 +806,5 @@ export const rollbackCommit = async (req, res) => {
     return res
       .status(500)
       .json({ message: "Failed to rollback commit", error: error.message });
-  }
-};
-
-/**
- * Reset Workspace to Template preset
- */
-export const resetWorkspaceTemplate = async (req, res) => {
-  try {
-    const { template } = req.body;
-    if (!template) {
-      return res
-        .status(400)
-        .json({ message: "Template preset name is required" });
-    }
-
-    const project = await Project.findOne({
-      _id: req.params.id,
-      owner: req.user.id,
-    });
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    await ProjectFile.deleteMany({ projectId: project._id });
-
-    const templateFiles = getTemplateFiles(template, project.name);
-    const docs = templateFiles.map((f) => ({
-      ...f,
-      projectId: project._id,
-      size: Buffer.byteLength(f.content || "", "utf8"),
-    }));
-    const newFiles = await ProjectFile.insertMany(docs);
-
-    const initialCommit = await createCommit({
-      projectId: project._id,
-      message: `Reset workspace to '${template}' preset`,
-      branch: project.currentBranch || "main",
-      author: {
-        name: req.user.name || "CloudForge Developer",
-        email: req.user.email || "developer@cloudforge.io",
-      },
-      files: newFiles,
-    });
-
-    project.template = template;
-    await project.save();
-
-    const commits = await ProjectCommit.find({
-      projectId: project._id,
-      branch: project.currentBranch || "main",
-    })
-      .sort({ createdAt: -1 })
-      .limit(30);
-
-    return res.json({
-      message: `Workspace reset to ${template} template successfully`,
-      project,
-      files: newFiles,
-      commits,
-    });
-  } catch (error) {
-    console.error("Reset template error:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to reset template", error: error.message });
   }
 };

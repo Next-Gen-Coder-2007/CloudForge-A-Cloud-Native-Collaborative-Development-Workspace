@@ -2,7 +2,7 @@ import Project from "../models/Project.js";
 
 export const createProject = async (req, res) => {
   try {
-    const { name, description, template } = req.body;
+    const { name, description } = req.body;
 
     if (!name) {
       return res.status(400).json({
@@ -13,7 +13,6 @@ export const createProject = async (req, res) => {
     const project = await Project.create({
       name,
       description,
-      template: template || "blank",
       owner: req.user.id,
     });
 
@@ -72,12 +71,11 @@ export const getProject = async (req, res) => {
 
 export const updateProject = async (req, res) => {
   try {
-    const { name, description, template } = req.body;
+    const { name, description } = req.body;
 
     const updateFields = {};
     if (name !== undefined) updateFields.name = name;
     if (description !== undefined) updateFields.description = description;
-    if (template !== undefined) updateFields.template = template;
 
     const project = await Project.findOneAndUpdate(
       {

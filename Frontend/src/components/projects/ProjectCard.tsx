@@ -43,14 +43,6 @@ function ProjectCard({
             </h3>
 
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {project.template && (
-                <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider ${
-                  isDark ? "bg-neutral-900 text-neutral-300" : "bg-neutral-100 text-neutral-700"
-                }`}>
-                  {project.template}
-                </span>
-              )}
-
               <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-semibold flex items-center gap-1 ${
                 isDark ? "bg-blue-500/15 text-blue-400 border border-blue-500/30" : "bg-blue-50 text-blue-700 border border-blue-100"
               }`}>

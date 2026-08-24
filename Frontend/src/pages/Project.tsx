@@ -56,7 +56,7 @@ function Projects() {
     const query = search.trim().toLowerCase();
     if (!query) return projects;
     return projects.filter((project) =>
-      [project.name, project.description, project.template].some((value) => value?.toLowerCase().includes(query))
+      [project.name, project.description].some((value) => value?.toLowerCase().includes(query))
     );
   }, [projects, search]);
 
@@ -148,7 +148,7 @@ function Projects() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search projects by name, description or template..."
+                placeholder="Search projects by name or description..."
                 className={`w-full px-3.5 py-2.5 border rounded-xl outline-none text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
                   isDark
                     ? "bg-black border-neutral-700 text-white placeholder-neutral-500 focus:bg-black"
