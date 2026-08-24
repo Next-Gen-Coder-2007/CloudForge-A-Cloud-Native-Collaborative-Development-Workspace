@@ -31,6 +31,7 @@ import { StashModal } from "../components/workspace/StashModal";
 import { CommitCompareModal } from "../components/workspace/CommitCompareModal";
 import { FileBlameModal } from "../components/workspace/FileBlameModal";
 import { EnvVariablesPanel } from "../components/workspace/EnvVariablesPanel";
+import { DeploymentPanel } from "../components/workspace/DeploymentPanel";
 import { vcsService } from "../services/vcsService";
 
 export default function ProjectView() {
@@ -1005,6 +1006,10 @@ export default function ProjectView() {
                   project={project}
                   onUpdateProject={(updated) => setProject(updated)}
                 />
+              )}
+
+              {activeActivityTab === "deploy" && (
+                <DeploymentPanel projectName={project?.name} />
               )}
 
               {activeActivityTab === "settings" && (

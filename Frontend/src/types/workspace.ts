@@ -1,4 +1,4 @@
-export type ActivityBarTab = "explorer" | "sourceControl" | "history" | "search" | "env" | "settings";
+export type ActivityBarTab = "explorer" | "sourceControl" | "history" | "search" | "env" | "deploy" | "settings";
 
 export interface WorkspaceFile {
   _id: string;

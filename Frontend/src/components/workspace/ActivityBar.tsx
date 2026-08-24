@@ -1,5 +1,5 @@
 import React from "react";
-import { Files, GitBranch, History, Search, KeyRound, Settings, Cloud } from "lucide-react";
+import { Files, GitBranch, History, Search, KeyRound, Rocket, Settings, Cloud } from "lucide-react";
 import { type ActivityBarTab } from "../../types/workspace";
 import { useTheme } from "../../context/ThemeContext";
 
@@ -50,6 +50,11 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
       label: "Environment Variables (.env)",
       icon: <KeyRound className="w-5 h-5" />,
       badge: envVariablesCount > 0 ? envVariablesCount : undefined,
+    },
+    {
+      id: "deploy",
+      label: "Cloud Deployments & Hosting (Coming Soon)",
+      icon: <Rocket className="w-5 h-5" />,
     },
   ];
 
