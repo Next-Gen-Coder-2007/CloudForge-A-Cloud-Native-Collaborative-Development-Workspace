@@ -1,5 +1,20 @@
 import mongoose from "mongoose";
 
+const envVariableSchema = new mongoose.Schema(
+  {
+    key: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    value: {
+      type: String,
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
 const projectSchema = new mongoose.Schema(
   {
     name: {
@@ -21,7 +36,6 @@ const projectSchema = new mongoose.Schema(
       index: true,
     },
 
-
     currentBranch: {
       type: String,
       default: "main",
@@ -31,6 +45,11 @@ const projectSchema = new mongoose.Schema(
     branches: {
       type: [String],
       default: ["main"],
+    },
+
+    envVariables: {
+      type: [envVariableSchema],
+      default: [],
     },
   },
   {
