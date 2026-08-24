@@ -16,6 +16,7 @@ import {
   Download,
   X,
   AlertTriangle,
+  FileText,
 } from "lucide-react";
 import { FileIcon } from "./FileIcon";
 import { FileUploadModal } from "./FileUploadModal";
@@ -35,6 +36,7 @@ interface FileExplorerProps {
   onRefreshFiles: () => Promise<void>;
   projectName: string;
   onCollapse?: () => void;
+  onOpenFileBlame?: (filePath: string, fileName: string) => void;
 }
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({
@@ -50,6 +52,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   onRefreshFiles,
   projectName,
   onCollapse,
+  onOpenFileBlame,
 }) => {
   const { isDark } = useTheme();
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
@@ -389,6 +392,16 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                   className={`p-1 rounded ${isDark ? "hover:text-white hover:bg-neutral-800" : "hover:text-black hover:bg-neutral-200"}`}
                 >
                   <Download className="w-3 h-3" />
+                </button>
+              )}
+
+              {node.file && onOpenFileBlame && (
+                <button
+                  onClick={() => onOpenFileBlame(node.file!.path, node.file!.name)}
+                  title="View Git Blame & History"
+                  className={`p-1 rounded ${isDark ? "hover:text-white hover:bg-neutral-800" : "hover:text-black hover:bg-neutral-200"}`}
+                >
+                  <FileText className="w-3 h-3 text-purple-400" />
                 </button>
               )}
 

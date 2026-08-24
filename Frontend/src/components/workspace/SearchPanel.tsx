@@ -78,10 +78,10 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   };
 
   return (
-    <div className={`h-full flex flex-col select-none overflow-hidden font-sans border-r transition-colors duration-150 ${
-      isDark ? "bg-neutral-950 text-white border-neutral-800" : "bg-neutral-50/70 text-black border-neutral-200"
+    <div className={`h-full flex flex-col select-none overflow-hidden font-sans transition-colors duration-150 ${
+      isDark ? "bg-neutral-950 text-white" : "bg-neutral-50/70 text-black"
     }`}>
-      <div className={`px-3 py-2.5 border-b ${
+      <div className={`px-2.5 py-2 border-b ${
         isDark ? "bg-neutral-950 border-neutral-800" : "bg-white/60 border-neutral-200"
       }`}>
         <span className={`text-[11px] font-bold tracking-wider uppercase ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>

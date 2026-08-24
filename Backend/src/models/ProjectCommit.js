@@ -56,6 +56,26 @@ const projectCommitSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    mergeParentSha: {
+      type: String,
+      default: null,
+    },
+    isMergeCommit: {
+      type: Boolean,
+      default: false,
+    },
+    isCherryPick: {
+      type: Boolean,
+      default: false,
+    },
+    isRevert: {
+      type: Boolean,
+      default: false,
+    },
+    tags: {
+      type: [String],
+      default: [],
+    },
     message: {
       type: String,
       required: true,
