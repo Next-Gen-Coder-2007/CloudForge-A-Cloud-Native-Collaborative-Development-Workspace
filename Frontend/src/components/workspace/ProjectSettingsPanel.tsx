@@ -9,6 +9,7 @@ import API_URL from "../../config/api";
 import { useAlert } from "../../hooks/useAlert";
 import { type Project } from "../../types/project";
 import { useTheme } from "../../context/ThemeContext";
+import DeleteProjectModal from "../projects/DeleteProjectModal";
 
 interface ProjectSettingsPanelProps {
   project: Project;
@@ -28,7 +29,7 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description || "");
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,17 +61,8 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
     }
   };
 
-  const handleDelete = async () => {
-    if (
-      !window.confirm(
-        `Are you sure you want to delete "${project.name}"? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
+  const handleConfirmDelete = async () => {
     try {
-      setIsDeleting(true);
       const res = await fetch(`${API_URL}/api/projects/${project._id}`, {
         method: "DELETE",
         credentials: "include",
@@ -85,7 +77,7 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
       window.location.href = "/projects";
     } catch (err: any) {
       showError(err.message || "Failed to delete project");
-      setIsDeleting(false);
+      throw err;
     }
   };
 
@@ -189,8 +181,7 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
         <div className="pt-1">
           <button
             type="button"
-            onClick={handleDelete}
-            disabled={isDeleting}
+            onClick={() => setIsDeleteModalOpen(true)}
             className="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-500 rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -198,6 +189,15 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
           </button>
         </div>
       </div>
+
+      <DeleteProjectModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        projectName={project.name}
+        onConfirmDelete={handleConfirmDelete}
+      />
     </div>
   );
 };
+
+export default ProjectSettingsPanel;

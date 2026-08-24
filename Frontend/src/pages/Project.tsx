@@ -9,6 +9,7 @@ import EmptyState from "../components/ui/EmptyState";
 import ProjectGrid from "../components/projects/ProjectGrid";
 import CreateProjectModal from "../components/projects/CreateProjectModal";
 import EditProjectModal from "../components/projects/EditProjectModal";
+import DeleteProjectModal from "../components/projects/DeleteProjectModal";
 import { type Project } from "../types/project";
 
 interface User {
@@ -26,6 +27,7 @@ function Projects() {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -69,9 +71,10 @@ function Projects() {
     setEditingProject(null);
   };
 
-  const handleDeleteProject = async (projectId: string) => {
+  const handleConfirmDelete = async () => {
+    if (!deletingProject) return;
     try {
-      const response = await fetch(`${API_URL}/api/projects/${projectId}`, {
+      const response = await fetch(`${API_URL}/api/projects/${deletingProject._id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -80,8 +83,9 @@ function Projects() {
         showError(data.message || "Failed to delete project.");
         return;
       }
-      setProjects((prev) => prev.filter((project) => project._id !== projectId));
-      showSuccess("Project deleted successfully.");
+      setProjects((prev) => prev.filter((project) => project._id !== deletingProject._id));
+      showSuccess(`Deleted project "${deletingProject.name}"`);
+      setDeletingProject(null);
     } catch (error) {
       showError("Failed to delete project.");
     }
@@ -179,7 +183,7 @@ function Projects() {
         ) : (
           <ProjectGrid
             projects={filteredProjects}
-            onDelete={handleDeleteProject}
+            onDelete={(project) => setDeletingProject(project)}
             onEdit={(project) => setEditingProject(project)}
           />
         )}
@@ -187,6 +191,14 @@ function Projects() {
 
       <CreateProjectModal isOpen={showCreate} onClose={() => setShowCreate(false)} onCreated={handleProjectCreated} />
       <EditProjectModal project={editingProject} onClose={() => setEditingProject(null)} onUpdated={handleProjectUpdated} />
+      {deletingProject && (
+        <DeleteProjectModal
+          isOpen={Boolean(deletingProject)}
+          onClose={() => setDeletingProject(null)}
+          projectName={deletingProject.name}
+          onConfirmDelete={handleConfirmDelete}
+        />
+      )}
     </div>
   );
 }

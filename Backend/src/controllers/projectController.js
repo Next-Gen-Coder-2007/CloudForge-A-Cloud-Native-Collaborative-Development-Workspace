@@ -91,7 +91,7 @@ export const updateProject = async (req, res) => {
       },
       updateFields,
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       }
     );
@@ -161,7 +161,7 @@ export const updateProjectEnv = async (req, res) => {
       },
       { $set: { envVariables: cleanVars } },
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       }
     );

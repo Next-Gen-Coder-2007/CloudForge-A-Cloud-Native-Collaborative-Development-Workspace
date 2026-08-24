@@ -3,7 +3,7 @@ import ProjectCard from "./ProjectCard";
 
 interface ProjectGridProps {
   projects: Project[];
-  onDelete: (projectId: string) => void;
+  onDelete: (project: Project) => void;
   onEdit?: (project: Project) => void;
 }
 
