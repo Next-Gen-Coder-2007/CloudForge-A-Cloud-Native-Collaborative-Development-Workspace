@@ -113,7 +113,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
 
         <div
           className="w-10 h-10 flex items-center justify-center text-blue-500 cursor-default"
-          title="CloudForge Native VCS: Active"
+          title="NebulaCode Native VCS: Active"
         >
           <Cloud className="w-4 h-4" />
         </div>

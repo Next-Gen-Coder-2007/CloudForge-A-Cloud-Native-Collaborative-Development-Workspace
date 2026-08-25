@@ -3,6 +3,7 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { Menu, X, LogOut, LayoutDashboard, FolderCode, Sun, Moon } from "lucide-react";
 import { useAlert } from "../../hooks/useAlert";
 import { useTheme } from "../../context/ThemeContext";
+import { BrandLogo } from "../ui/BrandLogo";
 import API_URL from "../../config/api";
 
 interface NavbarProps {
@@ -48,13 +49,11 @@ function Navbar({ user }: NavbarProps) {
         <div className="flex items-center gap-6 sm:gap-8">
           <button
             onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-2 text-xl font-bold tracking-tight focus:outline-none cursor-pointer"
+            className="flex items-center gap-2.5 text-xl font-bold tracking-tight focus:outline-none cursor-pointer"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 font-extrabold text-white text-xs shadow-md shadow-blue-500/20">
-              CF
-            </div>
+            <BrandLogo size={32} variant="nebulacode" isDark={isDark} />
             <span>
-              Cloud<span className="text-blue-500 font-extrabold">Forge</span>
+              Nebula<span className="text-blue-500 font-extrabold">Code</span>
             </span>
           </button>
 

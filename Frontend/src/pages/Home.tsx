@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Sparkles, Code2, GitBranch, Layers, Sun, Moon } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
+import { BrandLogo } from "../components/ui/BrandLogo";
 
 function Home() {
   const { isDark, toggleTheme } = useTheme();
@@ -13,12 +14,10 @@ function Home() {
         isDark ? "border-neutral-800 bg-black/90" : "border-neutral-200 bg-white/90"
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-xl bg-blue-600 font-extrabold text-white flex items-center justify-center text-xs shadow-md shadow-blue-500/20">
-              CF
-            </div>
+          <div className="flex items-center gap-2.5">
+            <BrandLogo size={34} variant="nebulacode" isDark={isDark} />
             <span className="font-bold text-lg tracking-tight">
-              Cloud<span className="text-blue-500 font-extrabold">Forge</span>
+              Nebula<span className="text-blue-500 font-extrabold">Code</span>
             </span>
           </div>
 
@@ -75,16 +74,16 @@ function Home() {
           <p className={`text-sm sm:text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-8 sm:mb-10 px-2 ${
             isDark ? "text-neutral-400" : "text-neutral-600"
           }`}>
-            CloudForge is a fast, proprietary browser IDE featuring a custom zero-dependency syntax highlighter, pure Pitch Black & Pure White themes, and our own built-in Version Control System with branch management, file diffs, and 1-click time-travel rollback.
+            NebulaCode is a fast, proprietary browser IDE featuring a custom zero-dependency syntax highlighter, pure Pitch Black & Pure White themes, and our own built-in Version Control System with branch management, file diffs, and 1-click time-travel rollback.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 max-w-md mx-auto sm:max-w-none">
             <Link
               to="/register"
-              className="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 text-sm sm:text-base cursor-pointer"
+              className="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 text-sm sm:text-base cursor-pointer group"
             >
               <span>Get Started for Free</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.3} />
             </Link>
 
             <Link
@@ -122,7 +121,7 @@ function Home() {
               }`}>
                 <GitBranch className="w-4 h-4" />
               </div>
-              <h3 className={`font-bold text-sm mb-1 ${isDark ? "text-white" : "text-black"}`}>CloudForge Native VCS</h3>
+              <h3 className={`font-bold text-sm mb-1 ${isDark ? "text-white" : "text-black"}`}>NebulaCode Native VCS</h3>
               <p className={`text-xs leading-relaxed ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
                 Our own proprietary version control system. Snapshot commits, create and merge branches without external Git services.
               </p>

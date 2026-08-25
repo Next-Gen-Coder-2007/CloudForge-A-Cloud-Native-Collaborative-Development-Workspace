@@ -879,7 +879,7 @@ export default function ProjectView() {
       <div className={`min-h-screen flex items-center justify-center transition-colors duration-150 ${
         isDark ? "bg-black text-white" : "bg-white text-black"
       }`}>
-        <LoadingSpinner text="Initializing CloudForge workspace..." fullScreen />
+        <LoadingSpinner text="Initializing NebulaCode workspace..." fullScreen />
       </div>
     );
   }

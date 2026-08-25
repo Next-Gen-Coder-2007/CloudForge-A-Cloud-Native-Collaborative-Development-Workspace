@@ -12,6 +12,7 @@ import {
 import { type Project } from "../../types/project";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../../context/ThemeContext";
+import { BrandLogo } from "../ui/BrandLogo";
 
 interface WorkspaceNavbarProps {
   project: Project;
@@ -70,16 +71,14 @@ export const WorkspaceNavbar: React.FC<WorkspaceNavbarProps> = ({
           }`}
           title="Back to Projects"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4" strokeWidth={2.3} />
           <span className="hidden md:inline">Projects</span>
         </button>
 
         <div className={`h-4 w-px hidden sm:block ${isDark ? "bg-neutral-800" : "bg-neutral-200"}`} />
 
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-600 font-extrabold text-white flex items-center justify-center text-xs shrink-0 shadow-md shadow-blue-500/20">
-            CF
-          </div>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <BrandLogo size={28} variant="nebulacode" isDark={isDark} />
           <div className="min-w-0">
             <h1 className={`font-bold text-xs sm:text-sm truncate max-w-[140px] xs:max-w-[180px] sm:max-w-[240px] md:max-w-[320px] ${
               isDark ? "text-white" : "text-black"
