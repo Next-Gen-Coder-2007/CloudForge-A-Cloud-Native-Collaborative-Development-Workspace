@@ -1,4 +1,6 @@
 import Project from "../models/Project.js";
+import ProjectFile from "../models/ProjectFile.js";
+import containerService from "../services/containerService.js";
 
 export const createProject = async (req, res) => {
   try {
@@ -195,6 +197,13 @@ export const deleteProject = async (req, res) => {
       return res.status(404).json({
         message: "Project not found",
       });
+    }
+
+    // Automatically clean up associated Docker container and workspace directory
+    try {
+      await containerService.deleteProjectContainer(req.params.id);
+    } catch (cleanupErr) {
+      console.warn(`Container cleanup error on project deletion (${req.params.id}):`, cleanupErr.message);
     }
 
     res.status(200).json({
