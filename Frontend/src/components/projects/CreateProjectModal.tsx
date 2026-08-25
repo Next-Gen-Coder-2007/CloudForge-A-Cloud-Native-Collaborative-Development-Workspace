@@ -3,7 +3,7 @@ import { useAlert } from "../../hooks/useAlert";
 import { useTheme } from "../../context/ThemeContext";
 import API_URL from "../../config/api";
 import { type CreateProjectData, type Project } from "../../types/project";
-import { Sparkles, FolderPlus } from "lucide-react";
+import { Sparkles, FolderPlus, X } from "lucide-react";
 
 interface CreateProjectModalProps {
   isOpen: boolean;
@@ -86,9 +86,11 @@ function CreateProjectModal({
           <button
             onClick={onClose}
             disabled={loading}
-            className={`text-2xl disabled:opacity-50 cursor-pointer ${isDark ? "text-neutral-400 hover:text-white" : "text-neutral-500 hover:text-black"}`}
+            className={`p-1.5 rounded-lg disabled:opacity-50 transition-colors cursor-pointer ${
+              isDark ? "text-neutral-400 hover:text-white hover:bg-neutral-900" : "text-neutral-500 hover:text-black hover:bg-neutral-100"
+            }`}
           >
-            ×
+            <X className="w-5 h-5" strokeWidth={2.3} />
           </button>
         </div>
 

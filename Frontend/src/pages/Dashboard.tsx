@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ArrowRight, Plus, FolderPlus, GitBranch } from "lucide-react";
 import API_URL from "../config/api";
 import { useAlert } from "../hooks/useAlert";
 import { useTheme } from "../context/ThemeContext";
@@ -90,9 +91,10 @@ function Dashboard() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigate("/projects")}
-                className="px-4 py-2 sm:py-2.5 bg-blue-600 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/20 cursor-pointer"
+                className="px-4 py-2 sm:py-2.5 bg-blue-600 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/20 cursor-pointer inline-flex items-center gap-1.5"
               >
-                + New Project
+                <Plus className="w-4 h-4" strokeWidth={2.5} />
+                <span>New Project</span>
               </button>
             </div>
           </div>
@@ -111,7 +113,7 @@ function Dashboard() {
             <p className={`text-xs font-medium uppercase tracking-wider ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>Active Workspace</p>
             <p className={`text-base sm:text-lg font-bold mt-1.5 flex items-center gap-2 ${isDark ? "text-white" : "text-black"}`}>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              CloudForge Native VCS
+              NebulaCode Native VCS
             </p>
           </div>
           <div className={`border rounded-2xl p-4 sm:p-6 shadow-2xs ${
@@ -145,18 +147,19 @@ function Dashboard() {
               <div className={`border border-dashed rounded-xl p-6 sm:p-8 text-center ${
                 isDark ? "border-neutral-800" : "border-neutral-300"
               }`}>
-                <div className={`w-10 h-10 sm:w-12 sm:h-12 mx-auto rounded-xl flex items-center justify-center text-lg sm:text-xl font-bold ${
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 mx-auto rounded-xl flex items-center justify-center font-bold ${
                   isDark ? "bg-blue-500/15 text-blue-400" : "bg-blue-50 text-blue-600"
                 }`}>
-                  +
+                  <FolderPlus className="w-5 h-5" strokeWidth={2.3} />
                 </div>
                 <h3 className={`font-bold text-sm sm:text-base mt-3 ${isDark ? "text-white" : "text-black"}`}>No projects yet</h3>
                 <p className={`text-xs sm:text-sm mt-1 ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>Create your first project to start coding.</p>
                 <button
                   onClick={() => navigate("/projects")}
-                  className="mt-3.5 text-xs sm:text-sm font-semibold text-blue-500 hover:text-blue-400 cursor-pointer"
+                  className="mt-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-blue-500 hover:text-blue-400 cursor-pointer"
                 >
-                  Create a project →
+                  <span>Create a project</span>
+                  <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.3} />
                 </button>
               </div>
             ) : (
@@ -190,17 +193,16 @@ function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-neutral-400 text-sm group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all">
-                      →
-                    </span>
+                    <ArrowRight className="w-4 h-4 text-neutral-400 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" strokeWidth={2.3} />
                   </button>
                 ))}
                 {projects.length > 3 && (
                   <button
                     onClick={() => navigate("/projects")}
-                    className="w-full pt-2 text-xs sm:text-sm font-semibold text-blue-500 hover:text-blue-400 text-center cursor-pointer"
+                    className="w-full pt-2 inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold text-blue-500 hover:text-blue-400 cursor-pointer"
                   >
-                    View all {projects.length} projects →
+                    <span>View all {projects.length} projects</span>
+                    <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.3} />
                   </button>
                 )}
               </div>
@@ -216,30 +218,34 @@ function Dashboard() {
               <div className="space-y-2.5">
                 <button
                   onClick={() => navigate("/projects")}
-                  className={`w-full flex items-center gap-3 p-3 sm:p-3.5 rounded-xl border transition-all text-left cursor-pointer ${
+                  className={`w-full flex items-center gap-3 p-3 sm:p-3.5 rounded-xl border transition-all text-left cursor-pointer group ${
                     isDark
                       ? "border-neutral-800 hover:border-blue-500/50 hover:bg-neutral-900"
                       : "border-neutral-200 hover:border-blue-300 hover:bg-blue-50/30"
                   }`}
                 >
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
                     isDark ? "bg-blue-500/20 text-blue-400" : "bg-blue-50 text-blue-600"
                   }`}>
-                    +
+                    <Plus className="w-4 h-4" strokeWidth={2.5} />
                   </div>
                   <div>
-                    <p className={`font-bold text-xs sm:text-sm ${isDark ? "text-white" : "text-black"}`}>Manage Projects</p>
+                    <p className={`font-bold text-xs sm:text-sm transition-colors ${
+                      isDark ? "text-white group-hover:text-blue-400" : "text-black group-hover:text-blue-600"
+                    }`}>
+                      Manage Projects
+                    </p>
                     <p className={`text-[11px] ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>Create, edit, or launch development workspaces</p>
                   </div>
                 </button>
 
                 <div className={`w-full flex items-center gap-3 p-3 sm:p-3.5 rounded-xl border text-left ${
-                  isDark ? "border-neutral-800 bg-neutral-900" : "border-neutral-100 bg-neutral-50"
+                  isDark ? "border-neutral-800 bg-neutral-900/60" : "border-neutral-100 bg-neutral-50"
                 }`}>
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
                     isDark ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700"
                   }`}>
-                    VCS
+                    <GitBranch className="w-4 h-4" strokeWidth={2.3} />
                   </div>
                   <div>
                     <p className={`font-bold text-xs sm:text-sm ${isDark ? "text-white" : "text-black"}`}>Native Version Control</p>
@@ -257,7 +263,7 @@ function Dashboard() {
           <div className="flex items-center justify-between mb-4 sm:mb-5">
             <div>
               <h2 className={`text-lg sm:text-xl font-bold ${isDark ? "text-white" : "text-black"}`}>Account Details</h2>
-              <p className={`text-xs sm:text-sm mt-0.5 ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>Your CloudForge profile credentials.</p>
+              <p className={`text-xs sm:text-sm mt-0.5 ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>Your NebulaCode profile credentials.</p>
             </div>
             <div className={`h-10 w-10 sm:h-11 sm:w-11 rounded-xl flex items-center justify-center text-base sm:text-lg font-bold uppercase ${
               isDark ? "bg-blue-500/15 border border-blue-500/30 text-blue-400" : "bg-blue-50 border border-blue-100 text-blue-600"
