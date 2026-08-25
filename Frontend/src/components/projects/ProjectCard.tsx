@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { type Project } from "../../types/project";
-import { GitBranch, Trash2 } from "lucide-react";
+import { GitBranch, Trash2, ArrowRight } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 
 interface ProjectCardProps {
@@ -86,10 +86,10 @@ function ProjectCard({
 
         <button
           onClick={() => navigate(`/projects/${project._id}`)}
-          className="inline-flex items-center gap-1 text-xs font-bold text-blue-500 hover:text-blue-600 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-500 hover:text-blue-600 transition-colors cursor-pointer group"
         >
           <span>Open Workspace</span>
-          <span>→</span>
+          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.3} />
         </button>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAlert } from "../hooks/useAlert"; 
 import { useTheme } from "../context/ThemeContext";
+import { BrandLogo } from "../components/ui/BrandLogo";
 import API_URL from "../config/api";
 
 interface FormData {
@@ -28,12 +29,18 @@ function Login() {
     });
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+
+    if (!form.email || !form.password) {
+      showError("Please fill in all fields");
+      return;
+    }
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/login`, {
+      setLoading(true);
+
+      const res = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -42,41 +49,37 @@ function Login() {
         body: JSON.stringify(form),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (!response.ok) {
-        throw new Error(data.message);
+      if (!res.ok) {
+        throw new Error(data.message || "Login failed");
       }
 
-      showSuccess("Successfully signed in");
+      showSuccess("Welcome back!");
       navigate("/dashboard");
-    } catch (error) {
-      if (error instanceof Error) {
-        showError(error.message);
-      } else {
-        showError("An unknown error occurred while signing in");
-      }
+    } catch (err: unknown) {
+      const error = err as Error;
+      showError(error.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className={`min-h-screen font-sans selection:bg-blue-200 flex items-center justify-center p-4 sm:p-6 relative overflow-hidden transition-colors duration-150 ${
+    <div className={`min-h-screen flex items-center justify-center px-4 sm:px-6 relative overflow-hidden transition-colors duration-150 ${
       isDark ? "bg-black text-white" : "bg-white text-black"
     }`}>
+      {/* Background glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] sm:w-[500px] h-[300px] bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
 
       <div className="w-full max-w-md relative z-10">
         <Link
           to="/"
-          className="flex items-center justify-center gap-2 mb-6 sm:mb-8 tracking-tight group"
+          className="flex items-center justify-center gap-2.5 mb-6 sm:mb-8 tracking-tight group"
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 font-extrabold text-white text-xs shadow-md shadow-blue-500/20">
-            CF
-          </div>
+          <BrandLogo size={38} variant="nebulacode" isDark={isDark} />
           <span className={`text-2xl font-bold ${isDark ? "text-white" : "text-black"}`}>
-            Cloud<span className="text-blue-500 font-extrabold">Forge</span>
+            Nebula<span className="text-blue-500 font-extrabold">Code</span>
           </span>
         </Link>
 
@@ -88,7 +91,7 @@ function Login() {
           </h2>
 
           <p className={`text-xs sm:text-sm mt-1.5 mb-6 ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
-            Sign in to access your CloudForge workspace.
+            Sign in to access your NebulaCode workspace.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">

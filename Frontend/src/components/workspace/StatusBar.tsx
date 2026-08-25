@@ -33,7 +33,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               ? "text-neutral-200 hover:bg-blue-500/20 hover:text-blue-300"
               : "text-neutral-800 hover:bg-blue-100 hover:text-blue-900"
           }`}
-          title="Switch Branch / View CloudForge Source Control"
+          title="Switch Branch / View NebulaCode Source Control"
         >
           <GitBranch className="w-3 h-3 text-blue-500" />
           <span>{currentBranch}</span>
@@ -65,10 +65,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
         <div
           className="flex items-center gap-1 text-blue-500 font-bold"
-          title="CloudForge Native Version Control: Online"
+          title="NebulaCode Native Version Control: Online"
         >
           <Cloud className="w-3 h-3" />
-          <span className="hidden lg:inline">CloudForge VCS</span>
+          <span className="hidden lg:inline">NebulaCode VCS</span>
         </div>
       </div>
     </footer>

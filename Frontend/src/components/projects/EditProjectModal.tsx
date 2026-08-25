@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAlert } from "../../hooks/useAlert";
 import { useTheme } from "../../context/ThemeContext";
+import { X } from "lucide-react";
 import API_URL from "../../config/api";
 import { type Project } from "../../types/project";
 
@@ -92,9 +93,11 @@ function EditProjectModal({
           <button
             onClick={onClose}
             disabled={loading}
-            className={`text-2xl disabled:opacity-50 cursor-pointer ${isDark ? "text-neutral-400 hover:text-white" : "text-neutral-500 hover:text-black"}`}
+            className={`p-1.5 rounded-lg disabled:opacity-50 transition-colors cursor-pointer ${
+              isDark ? "text-neutral-400 hover:text-white hover:bg-neutral-900" : "text-neutral-500 hover:text-black hover:bg-neutral-100"
+            }`}
           >
-            ×
+            <X className="w-5 h-5" strokeWidth={2.3} />
           </button>
         </div>
 

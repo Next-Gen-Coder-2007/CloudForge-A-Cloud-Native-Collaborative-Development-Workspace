@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Plus } from "lucide-react";
 import API_URL from "../config/api";
 import { useAlert } from "../hooks/useAlert";
 import { useTheme } from "../context/ThemeContext";
@@ -135,9 +136,10 @@ function Projects() {
             <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
               <button
                 onClick={() => setShowCreate(true)}
-                className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/20 text-center cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/20 text-center cursor-pointer inline-flex items-center justify-center gap-1.5"
               >
-                + New Project
+                <Plus className="w-4 h-4" strokeWidth={2.5} />
+                <span>New Project</span>
               </button>
             </div>
           </div>
@@ -171,8 +173,8 @@ function Projects() {
         {projects.length === 0 ? (
           <EmptyState
             title="No projects yet"
-            description="Create your first CloudForge project with native version control."
-            buttonText="+ Create Project"
+            description="Create your first NebulaCode project with native version control."
+            buttonText="Create Project"
             onButtonClick={() => setShowCreate(true)}
           />
         ) : filteredProjects.length === 0 ? (
