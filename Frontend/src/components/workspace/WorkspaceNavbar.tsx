@@ -8,6 +8,7 @@ import {
   PanelLeft,
   Sun,
   Moon,
+  Globe,
 } from "lucide-react";
 import { type Project } from "../../types/project";
 import { useNavigate } from "react-router-dom";
@@ -23,6 +24,8 @@ interface WorkspaceNavbarProps {
   onDownloadZip: () => void;
   onToggleMobileSidebar?: () => void;
   isMobileSidebarOpen?: boolean;
+  onTogglePreview?: () => void;
+  isPreviewOpen?: boolean;
 }
 
 export const WorkspaceNavbar: React.FC<WorkspaceNavbarProps> = ({
@@ -34,6 +37,8 @@ export const WorkspaceNavbar: React.FC<WorkspaceNavbarProps> = ({
   onDownloadZip,
   onToggleMobileSidebar,
   isMobileSidebarOpen,
+  onTogglePreview,
+  isPreviewOpen = false,
 }) => {
   const navigate = useNavigate();
   const { isDark, toggleTheme } = useTheme();
@@ -129,6 +134,23 @@ export const WorkspaceNavbar: React.FC<WorkspaceNavbarProps> = ({
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2">
+        {onTogglePreview && (
+          <button
+            onClick={onTogglePreview}
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer shadow-xs ${
+              isPreviewOpen
+                ? "bg-blue-600 border-blue-500 text-white"
+                : isDark
+                ? "bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border-blue-500/30"
+                : "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+            }`}
+            title="Toggle Live Web Application Preview"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Preview</span>
+          </button>
+        )}
+
         {/* Instant Dark / Light Theme Toggle Button */}
         <button
           onClick={toggleTheme}
