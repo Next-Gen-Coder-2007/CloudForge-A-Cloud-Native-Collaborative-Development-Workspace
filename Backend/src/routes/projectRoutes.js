@@ -43,10 +43,14 @@ import {
 } from "../controllers/workspaceController.js";
 
 import { protect } from "../middleware/authMiddleware.js";
+import containerRoutes from "./containerRoutes.js";
 
 const router = express.Router();
 
 router.use(protect);
+
+// Isolated Docker Workspace Container API
+router.use("/:id/container", containerRoutes);
 
 // Project CRUD & Environment Variables
 router.post("/", createProject);

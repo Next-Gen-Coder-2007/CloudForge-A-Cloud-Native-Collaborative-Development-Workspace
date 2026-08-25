@@ -26,6 +26,7 @@ import {
   renameBranch,
   rollbackToCommit,
 } from "../services/vcsService.js";
+import containerService from "../services/containerService.js";
 
 const computeContentSize = (content) => {
   if (!content) return 0;
@@ -350,6 +351,11 @@ export const createProjectFile = async (req, res) => {
     project.updatedAt = new Date();
     await project.save();
 
+    // Asynchronously synchronize new file to disk workspace
+    if (newFile.type === "file") {
+      containerService.syncSingleFile(project._id, newFile.path, newFile.content).catch(() => {});
+    }
+
     return res.status(201).json({
       message: `${type === "directory" ? "Folder" : "File"} '${cleanName}' created successfully`,
       file: newFile,
@@ -473,6 +479,9 @@ export const updateProjectFile = async (req, res) => {
 
     project.updatedAt = new Date();
     await project.save();
+
+    // Asynchronously synchronize file update to disk workspace
+    containerService.syncSingleFile(project._id, file.path, file.content).catch(() => {});
 
     return res.json({
       message: "File updated successfully",

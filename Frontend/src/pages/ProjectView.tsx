@@ -32,7 +32,11 @@ import { CommitCompareModal } from "../components/workspace/CommitCompareModal";
 import { FileBlameModal } from "../components/workspace/FileBlameModal";
 import { EnvVariablesPanel } from "../components/workspace/EnvVariablesPanel";
 import { DeploymentPanel } from "../components/workspace/DeploymentPanel";
+import { BottomPanel } from "../components/workspace/BottomPanel";
+import { PreviewPanel } from "../components/workspace/PreviewPanel";
 import { vcsService } from "../services/vcsService";
+import { containerService } from "../services/containerService";
+import { type ContainerInfo, type DockerStatus, type CloudRunnerStatus } from "../types/container";
 
 export default function ProjectView() {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +44,7 @@ export default function ProjectView() {
   const { isDark } = useTheme();
 
   const [project, setProject] = useState<Project | null>(null);
+  const [cloudRunner, setCloudRunner] = useState<CloudRunnerStatus | null>(null);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [commits, setCommits] = useState<GitCommit[]>([]);
   const [currentBranch, setCurrentBranch] = useState<string>("main");
@@ -61,6 +66,111 @@ export default function ProjectView() {
     useState<ActivityBarTab>("explorer");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Bottom Terminal & Execution Panel States
+  const [isTerminalOpen, setIsTerminalOpen] = useState<boolean>(() => {
+    const saved = localStorage.getItem("cf_terminal_open");
+    return saved !== null ? saved === "true" : true;
+  });
+  const [terminalHeight, setTerminalHeight] = useState<number>(() => {
+    const saved = localStorage.getItem("cf_terminal_height");
+    return saved ? Math.max(120, parseInt(saved, 10)) : 230;
+  });
+  const [containerInfo, setContainerInfo] = useState<ContainerInfo | null>(null);
+  const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem("cf_terminal_open", isTerminalOpen.toString());
+  }, [isTerminalOpen]);
+
+  useEffect(() => {
+    localStorage.setItem("cf_terminal_height", terminalHeight.toString());
+  }, [terminalHeight]);
+
+  // Global Keyboard Shortcuts (Ctrl+` or Cmd+` to toggle terminal)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "`") {
+        e.preventDefault();
+        setIsTerminalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Split Live Web App Preview State
+  const [isPreviewSplitOpen, setIsPreviewSplitOpen] = useState<boolean>(() => {
+    const saved = localStorage.getItem("cf_preview_split_open");
+    return saved === "true";
+  });
+  const [previewSplitWidth, setPreviewSplitWidth] = useState<number>(() => {
+    const saved = localStorage.getItem("cf_preview_split_width");
+    return saved ? Math.max(25, Math.min(75, parseInt(saved, 10))) : 48;
+  });
+  const [isResizingPreview, setIsResizingPreview] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem("cf_preview_split_open", isPreviewSplitOpen.toString());
+  }, [isPreviewSplitOpen]);
+
+  useEffect(() => {
+    localStorage.setItem("cf_preview_split_width", previewSplitWidth.toString());
+  }, [previewSplitWidth]);
+
+  const handleMouseDownPreviewResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingPreview(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingPreview) return;
+      const totalWidth = window.innerWidth;
+      const rightDistance = totalWidth - e.clientX;
+      const percent = Math.max(20, Math.min(80, (rightDistance / totalWidth) * 100));
+      setPreviewSplitWidth(Math.round(percent));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingPreview(false);
+    };
+
+    if (isResizingPreview) {
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    }
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingPreview]);
+
+  // Fetch Container Status
+  const refreshContainerState = useCallback(async () => {
+    if (!id) return;
+    try {
+      const data = await containerService.getStatus(id);
+      setDockerStatus(data.docker);
+      setContainerInfo(data.container);
+      if (data.cloudRunner) {
+        setCloudRunner(data.cloudRunner);
+      }
+    } catch {
+      // ignore
+    }
+  }, [id]);
+
+  useEffect(() => {
+    refreshContainerState();
+    const interval = setInterval(refreshContainerState, 10000);
+    return () => clearInterval(interval);
+  }, [refreshContainerState]);
 
   // Dynamic Sidebar Resizing (VS Code style)
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
@@ -899,6 +1009,8 @@ export default function ProjectView() {
         onDownloadZip={handleDownloadZip}
         onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
         isMobileSidebarOpen={isMobileSidebarOpen}
+        onTogglePreview={() => setIsPreviewSplitOpen((prev) => !prev)}
+        isPreviewOpen={isPreviewSplitOpen}
       />
 
       <div className="flex-1 flex overflow-hidden relative">
@@ -925,6 +1037,8 @@ export default function ProjectView() {
             changedFilesCount={changedFiles.length}
             commitsCount={commits.length}
             envVariablesCount={project?.envVariables?.length || 0}
+            onToggleTerminal={() => setIsTerminalOpen((prev) => !prev)}
+            isTerminalOpen={isTerminalOpen}
           />
 
           <div
@@ -1001,6 +1115,14 @@ export default function ProjectView() {
                 />
               )}
 
+              {activeActivityTab === "preview" && (
+                <PreviewPanel
+                  projectId={project._id}
+                  projectName={project.name}
+                  files={files}
+                />
+              )}
+
               {activeActivityTab === "env" && (
                 <EnvVariablesPanel
                   project={project}
@@ -1042,35 +1164,83 @@ export default function ProjectView() {
           )}
         </div>
 
-        <div className={`flex-1 flex flex-col h-full overflow-hidden min-w-0 transition-colors duration-150 ${
+        <div className={`flex-1 flex flex-row h-full overflow-hidden min-w-0 transition-colors duration-150 ${
           isDark ? "bg-black" : "bg-white"
         }`}>
-          <div className="flex-1 overflow-hidden">
-            {diffTarget ? (
-              <DiffViewer
-                filename={diffTarget.filename}
-                filepath={diffTarget.filepath}
-                originalContent={diffTarget.originalContent}
-                modifiedContent={diffTarget.modifiedContent}
-                onClose={() => setDiffTarget(null)}
-                onStageChange={
-                  diffTarget.fileId
-                    ? () => handleStageFile(diffTarget.fileId!)
-                    : undefined
-                }
-              />
-            ) : (
-              <CodeEditor
-                tabs={tabs}
-                activeTabId={activeTabId}
-                onSelectTab={(fileId) => setActiveTabId(fileId)}
-                onCloseTab={handleCloseTab}
-                onContentChange={handleContentChange}
-                onSaveFile={handleSaveFile}
-                projectName={project.name}
-              />
-            )}
+          {/* Main Editor & Terminal Column */}
+          <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+            <div className="flex-1 overflow-hidden">
+              {diffTarget ? (
+                <DiffViewer
+                  filename={diffTarget.filename}
+                  filepath={diffTarget.filepath}
+                  originalContent={diffTarget.originalContent}
+                  modifiedContent={diffTarget.modifiedContent}
+                  onClose={() => setDiffTarget(null)}
+                  onStageChange={
+                    diffTarget.fileId
+                      ? () => handleStageFile(diffTarget.fileId!)
+                      : undefined
+                  }
+                />
+              ) : (
+                <CodeEditor
+                  tabs={tabs}
+                  activeTabId={activeTabId}
+                  onSelectTab={(fileId) => setActiveTabId(fileId)}
+                  onCloseTab={handleCloseTab}
+                  onContentChange={handleContentChange}
+                  onSaveFile={handleSaveFile}
+                  projectName={project.name}
+                />
+              )}
+            </div>
+
+            {/* CloudForge In-Container Interactive Terminal & Diagnostics Panel */}
+            <BottomPanel
+              projectId={project._id}
+              projectName={project.name}
+              isOpen={isTerminalOpen}
+              onClose={() => setIsTerminalOpen(false)}
+              height={terminalHeight}
+              onHeightChange={(h) => setTerminalHeight(h)}
+            />
           </div>
+
+          {/* Split Screen Live Web Application Preview Pane */}
+          {isPreviewSplitOpen && (
+            <>
+              {/* Center Draggable Resizing Divider */}
+              <div
+                onMouseDown={handleMouseDownPreviewResize}
+                className={`w-1 cursor-col-resize select-none h-full shrink-0 relative z-20 group transition-colors ${
+                  isResizingPreview
+                    ? "bg-blue-500 w-1.5 shadow-xs"
+                    : isDark
+                    ? "hover:bg-blue-500/70 bg-neutral-800"
+                    : "hover:bg-blue-500/70 bg-neutral-200"
+                }`}
+                title="Drag to resize split preview"
+              >
+                <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
+              </div>
+
+              {/* Live Preview Panel */}
+              <div
+                style={{ width: `${previewSplitWidth}%` }}
+                className={`h-full flex flex-col overflow-hidden min-w-[320px] max-w-[85%] border-l shrink-0 ${
+                  isDark ? "border-neutral-800" : "border-neutral-200"
+                }`}
+              >
+                <PreviewPanel
+                  projectId={project._id}
+                  projectName={project.name}
+                  files={files}
+                  onClose={() => setIsPreviewSplitOpen(false)}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -1084,6 +1254,13 @@ export default function ProjectView() {
             setIsMobileSidebarOpen(true);
           }
         }}
+        onToggleTerminal={() => setIsTerminalOpen((prev) => !prev)}
+        isTerminalOpen={isTerminalOpen}
+        containerRunning={containerInfo?.status === "running"}
+        containerRuntime={containerInfo?.runtime?.displayName}
+        dockerAvailable={dockerStatus?.available}
+        cloudProvider={cloudRunner?.provider || "Cloud Engine"}
+        cloudHosted={cloudRunner ? cloudRunner.cloudHosted : true}
       />
 
       <BranchManagerModal

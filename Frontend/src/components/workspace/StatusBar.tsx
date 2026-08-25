@@ -1,5 +1,5 @@
 import React from "react";
-import { GitBranch, Cloud } from "lucide-react";
+import { GitBranch, Cloud, Terminal } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 
 interface StatusBarProps {
@@ -8,6 +8,13 @@ interface StatusBarProps {
   activeLanguage?: string;
   cursorPos?: { line: number; col: number };
   onOpenSourceControl: () => void;
+  onToggleTerminal?: () => void;
+  isTerminalOpen?: boolean;
+  containerRunning?: boolean;
+  containerRuntime?: string;
+  dockerAvailable?: boolean;
+  cloudProvider?: string;
+  cloudHosted?: boolean;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -16,6 +23,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   activeLanguage = "TypeScript",
   cursorPos = { line: 1, col: 1 },
   onOpenSourceControl,
+  onToggleTerminal,
+  containerRunning = false,
+  containerRuntime,
+  dockerAvailable = true,
+  cloudProvider = "Cloud Engine",
+  cloudHosted = true,
 }) => {
   const { isDark } = useTheme();
 
@@ -33,7 +46,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               ? "text-neutral-200 hover:bg-blue-500/20 hover:text-blue-300"
               : "text-neutral-800 hover:bg-blue-100 hover:text-blue-900"
           }`}
-          title="Switch Branch / View NebulaCode Source Control"
+          title="Switch Branch / View Source Control"
         >
           <GitBranch className="w-3 h-3 text-blue-500" />
           <span>{currentBranch}</span>
@@ -51,6 +64,31 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             <span>{changedFilesCount} pending changes</span>
           </button>
         )}
+
+        {onToggleTerminal && (
+          <button
+            onClick={onToggleTerminal}
+            className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
+              !dockerAvailable
+                ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/30"
+                : containerRunning
+                ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30"
+                : isDark
+                ? "hover:bg-neutral-800 text-neutral-400"
+                : "hover:bg-neutral-200 text-neutral-600"
+            }`}
+            title={`Toggle CloudForge Terminal (${cloudProvider}) (Ctrl+\`)`}
+          >
+            <Terminal className="w-3 h-3" />
+            <span>
+              {!dockerAvailable
+                ? "Workspace Shell"
+                : containerRunning
+                ? `${cloudHosted ? "☁️ Cloud" : "🐳 Docker"}: ${containerRuntime || "Running"}`
+                : "Terminal"}
+            </span>
+          </button>
+        )}
       </div>
 
       <div className="flex items-center gap-3 font-mono">
@@ -65,12 +103,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
         <div
           className="flex items-center gap-1 text-blue-500 font-bold"
-          title="NebulaCode Native Version Control: Online"
+          title="CloudForge Cloud Workspace & VCS: Active"
         >
           <Cloud className="w-3 h-3" />
-          <span className="hidden lg:inline">NebulaCode VCS</span>
+          <span className="hidden lg:inline">CloudForge</span>
         </div>
       </div>
     </footer>
   );
 };
+
+export default StatusBar;

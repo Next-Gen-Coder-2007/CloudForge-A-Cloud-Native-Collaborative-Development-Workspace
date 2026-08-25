@@ -1,5 +1,5 @@
 import React from "react";
-import { Files, GitBranch, History, Search, KeyRound, Rocket, Settings, Cloud } from "lucide-react";
+import { Files, GitBranch, History, Search, KeyRound, Rocket, Settings, Cloud, Terminal as TerminalIcon, Globe } from "lucide-react";
 import { type ActivityBarTab } from "../../types/workspace";
 import { useTheme } from "../../context/ThemeContext";
 
@@ -10,6 +10,8 @@ interface ActivityBarProps {
   commitsCount?: number;
   envVariablesCount?: number;
   isSidebarOpen?: boolean;
+  onToggleTerminal?: () => void;
+  isTerminalOpen?: boolean;
 }
 
 export const ActivityBar: React.FC<ActivityBarProps> = ({
@@ -19,6 +21,8 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
   commitsCount = 0,
   envVariablesCount = 0,
   isSidebarOpen = true,
+  onToggleTerminal,
+  isTerminalOpen = false,
 }) => {
   const { isDark } = useTheme();
 
@@ -39,6 +43,11 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
       label: "Commit Timeline & Time Travel (Rollback)",
       icon: <History className="w-5 h-5" />,
       badge: commitsCount > 0 ? commitsCount : undefined,
+    },
+    {
+      id: "preview",
+      label: "Live Web App Preview & Dev Servers",
+      icon: <Globe className="w-5 h-5 text-blue-400" />,
     },
     {
       id: "search",
@@ -95,6 +104,24 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
       </div>
 
       <div className="flex flex-col items-center gap-1 w-full">
+        {onToggleTerminal && (
+          <button
+            onClick={onToggleTerminal}
+            className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
+              isTerminalOpen
+                ? isDark
+                  ? "text-blue-400 bg-blue-500/15 border-l-2 border-blue-500 rounded-l-none font-semibold"
+                  : "text-blue-600 bg-blue-50 border-l-2 border-blue-600 rounded-l-none font-semibold"
+                : isDark
+                ? "text-neutral-400 hover:text-white hover:bg-neutral-900"
+                : "text-neutral-500 hover:text-black hover:bg-neutral-100"
+            }`}
+            title={isTerminalOpen ? "Toggle Terminal (Ctrl+`)" : "Open Terminal & Docker Workspace"}
+          >
+            <TerminalIcon className="w-5 h-5" />
+          </button>
+        )}
+
         <button
           onClick={() => onChangeTab("settings")}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all cursor-pointer ${

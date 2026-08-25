@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'katex/dist/katex.min.css';
+@import '@xterm/xterm/css/xterm.css';
 
 html.dark,
 html.dark body {

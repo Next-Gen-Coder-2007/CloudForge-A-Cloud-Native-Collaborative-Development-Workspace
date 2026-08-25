@@ -23,3 +23,5 @@ dist-ssr
 
 
 .env
+storage/
+Backend/storage/
