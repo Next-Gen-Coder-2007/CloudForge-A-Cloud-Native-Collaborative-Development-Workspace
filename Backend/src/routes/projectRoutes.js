@@ -44,6 +44,7 @@ import {
 
 import { protect } from "../middleware/authMiddleware.js";
 import containerRoutes from "./containerRoutes.js";
+import kernelRoutes from "./kernelRoutes.js";
 
 const router = express.Router();
 
@@ -51,6 +52,9 @@ router.use(protect);
 
 // Isolated Docker Workspace Container API
 router.use("/:id/container", containerRoutes);
+
+// Jupyter Notebook Kernel Execution API
+router.use("/:id/kernel", kernelRoutes);
 
 // Project CRUD & Environment Variables
 router.post("/", createProject);
