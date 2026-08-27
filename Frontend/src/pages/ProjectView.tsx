@@ -1192,6 +1192,7 @@ export default function ProjectView() {
                   onContentChange={handleContentChange}
                   onSaveFile={handleSaveFile}
                   projectName={project.name}
+                  projectId={project._id}
                 />
               )}
             </div>

@@ -32,6 +32,7 @@ import { SpreadsheetViewer } from "./viewers/SpreadsheetViewer";
 import { DocxViewer } from "./viewers/DocxViewer";
 import { PptxViewer } from "./viewers/PptxViewer";
 import { MediaViewer } from "./viewers/MediaViewer";
+import { IpynbViewer } from "./viewers/IpynbViewer";
 
 interface CodeEditorProps {
   tabs: EditorTab[];
@@ -41,6 +42,7 @@ interface CodeEditorProps {
   onContentChange: (fileId: string, newContent: string) => void;
   onSaveFile: (fileId: string, isSilent?: boolean) => Promise<void>;
   projectName: string;
+  projectId?: string;
 }
 
 const SUPPORTED_LANGUAGES = [
@@ -90,6 +92,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   onContentChange,
   onSaveFile,
   projectName,
+  projectId,
 }) => {
   const activeTab = tabs.find((t) => t.fileId === activeTabId);
   const { isDark } = useTheme();
@@ -169,6 +172,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const isDocx = ["docx", "doc"].includes(activeExt);
   const isPptx = ["pptx", "ppt", "ppsx"].includes(activeExt);
   const isMedia = ["mp3", "wav", "ogg", "mp4", "webm", "mov"].includes(activeExt);
+  const isIpynb = activeExt === "ipynb";
 
   // Reset custom language when tab changes
   useEffect(() => {
@@ -687,6 +691,17 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             content={activeTab.content}
             filename={activeTab.name}
             size={activeTab.content ? Math.round((activeTab.content.length * 3) / 4) : 0}
+          />
+        </div>
+      ) : isIpynb ? (
+        <div className="flex-1 overflow-hidden">
+          <IpynbViewer
+            content={activeTab.content}
+            filename={activeTab.name}
+            projectId={projectId}
+            isDirty={activeTab.isDirty}
+            onContentChange={(val) => onContentChange(activeTab.fileId, val)}
+            onSave={() => onSaveFile(activeTab.fileId)}
           />
         </div>
       ) : (

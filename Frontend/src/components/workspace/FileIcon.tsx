@@ -28,6 +28,7 @@ import {
   SiGo,
   SiGnubash,
   SiYaml,
+  SiJupyter,
 } from "react-icons/si";
 import { FaFilePdf, FaFileWord, FaFileExcel, FaFilePowerpoint } from "react-icons/fa6";
 
@@ -93,6 +94,11 @@ export const FileIcon: React.FC<FileIconProps> = ({
   // Markdown & Readme
   if (ext === "md" || ext === "markdown" || lower.startsWith("readme")) {
     return <SiMarkdown className={`${className} text-blue-400 shrink-0`} />;
+  }
+
+  // Jupyter Notebook
+  if (ext === "ipynb") {
+    return <SiJupyter className={`${className} text-orange-500 shrink-0`} />;
   }
 
   // React & Web Frameworks
