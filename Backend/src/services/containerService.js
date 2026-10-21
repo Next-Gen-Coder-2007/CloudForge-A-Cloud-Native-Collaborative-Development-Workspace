@@ -410,7 +410,18 @@ class ContainerService {
         if (!fs.existsSync(parentDir)) {
           fs.mkdirSync(parentDir, { recursive: true });
         }
-        fs.writeFileSync(targetPath, file.content || "", "utf8");
+        try {
+          fs.writeFileSync(targetPath, file.content || "", "utf8");
+        } catch (writeErr) {
+          if (writeErr.code === "EACCES" || writeErr.code === "EPERM") {
+            try {
+              fs.unlinkSync(targetPath);
+              fs.writeFileSync(targetPath, file.content || "", "utf8");
+            } catch {
+              // Silently skip if cannot overwrite to avoid breaking terminal session
+            }
+          }
+        }
       }
     }
 
