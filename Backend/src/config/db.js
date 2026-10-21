@@ -49,15 +49,6 @@ export const connectDB = async () => {
 
   // 1. Try connecting to configured external URI if provided
   if (mongoUri) {
-    if (mongoUri.startsWith("mongodb+srv://")) {
-      try {
-        const dns = (await import("dns")).default;
-        dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
-      } catch {
-        // ignore
-      }
-    }
-
     try {
       console.log("Connecting to configured MongoDB URI...");
       await mongoose.connect(mongoUri, {
@@ -68,6 +59,24 @@ export const connectDB = async () => {
       return true;
     } catch (error) {
       console.warn("Configured MongoDB connection failed:", error.message);
+
+      // If it failed with a DNS SRV error, try public DNS fallback
+      if (mongoUri.startsWith("mongodb+srv://") && (error.message.includes("querySrv") || error.message.includes("ENOTFOUND"))) {
+        try {
+          console.log("Attempting DNS fallback for MongoDB SRV resolution...");
+          const dns = (await import("dns")).default;
+          dns.setServers(["8.8.8.8", "1.1.1.1"]);
+          await mongoose.connect(mongoUri, {
+            dbName: process.env.DB_NAME || "cloudforge",
+            serverSelectionTimeoutMS: 5000,
+          });
+          console.log("MongoDB connected successfully via DNS fallback");
+          return true;
+        } catch (fallbackErr) {
+          console.warn("MongoDB DNS fallback failed:", fallbackErr.message);
+        }
+      }
+
       if (process.env.VERCEL) {
         console.error("Serverless MongoDB connection failed. Please ensure MONGO_URI is set in Vercel project environment variables.");
         return false;
