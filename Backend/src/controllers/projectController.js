@@ -36,7 +36,7 @@ export const createProject = async (req, res) => {
             type: "file",
             language: "python",
             mimeType: "text/x-python",
-            content: `# CloudForge Cloud Workspace - Python 3.11 Runtime\n\ndef main():\n    print("☁ CloudForge Python runtime active.")\n    print("Hello from /workspace/main.py!")\n\nif __name__ == "__main__":\n    main()\n`,
+            content: `# CloudForge Cloud Workspace - Python 3.11 Runtime\n\ndef main():\n    print("CloudForge Python runtime active.")\n    print("Hello from /workspace/main.py!")\n\nif __name__ == "__main__":\n    main()\n`,
           },
           {
             name: "requirements.txt",
@@ -65,7 +65,7 @@ export const createProject = async (req, res) => {
             type: "file",
             language: "go",
             mimeType: "text/x-go",
-            content: `package main\n\nimport "fmt"\n\nfunc main() {\n\tfmt.Println("☁ CloudForge Go 1.22 runtime active.")\n\tfmt.Println("Hello from /workspace/main.go!")\n}\n`,
+            content: `package main\n\nimport "fmt"\n\nfunc main() {\n\tfmt.Println("CloudForge Go 1.22 runtime active.")\n\tfmt.Println("Hello from /workspace/main.go!")\n}\n`,
           },
           {
             name: "go.mod",
@@ -94,7 +94,7 @@ export const createProject = async (req, res) => {
             type: "file",
             language: "rust",
             mimeType: "text/x-rust",
-            content: `fn main() {\n    println!("☁ CloudForge Rust runtime active.");\n    println!("Hello from /workspace/main.rs!");\n}\n`,
+            content: `fn main() {\n    println!("CloudForge Rust runtime active.");\n    println!("Hello from /workspace/main.rs!");\n}\n`,
           },
           {
             name: "Cargo.toml",
@@ -123,7 +123,7 @@ export const createProject = async (req, res) => {
             type: "file",
             language: "cpp",
             mimeType: "text/x-c++src",
-            content: `#include <iostream>\n\nint main() {\n    std::cout << "☁ CloudForge C++ (GCC) runtime active." << std::endl;\n    std::cout << "Hello from /workspace/main.cpp!" << std::endl;\n    return 0;\n}\n`,
+            content: `#include <iostream>\n\nint main() {\n    std::cout << "CloudForge C++ (GCC) runtime active." << std::endl;\n    std::cout << "Hello from /workspace/main.cpp!" << std::endl;\n    return 0;\n}\n`,
           },
           {
             name: "Makefile",
@@ -152,7 +152,7 @@ export const createProject = async (req, res) => {
             type: "file",
             language: "java",
             mimeType: "text/x-java-source",
-            content: `public class Main {\n    public static void main(String[] args) {\n        System.out.println("☁ CloudForge Java 17 runtime active.");\n        System.out.println("Hello from /workspace/Main.java!");\n    }\n}\n`,
+            content: `public class Main {\n    public static void main(String[] args) {\n        System.out.println("CloudForge Java 17 runtime active.");\n        System.out.println("Hello from /workspace/Main.java!");\n    }\n}\n`,
           },
           {
             name: "README.md",
@@ -173,7 +173,7 @@ export const createProject = async (req, res) => {
             type: "file",
             language: "html",
             mimeType: "text/html",
-            content: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>${name}</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <div class="card">\n    <h1>☁ ${name}</h1>\n    <p>Running live on CloudForge Cloud Workspace.</p>\n    <button id="actionBtn">Click Me</button>\n  </div>\n  <script src="app.js"></script>\n</body>\n</html>\n`,
+            content: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>${name}</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <div class="card">\n    <h1>${name}</h1>\n    <p>Running live on CloudForge Cloud Workspace.</p>\n    <button id="actionBtn">Click Me</button>\n  </div>\n  <script src="app.js"></script>\n</body>\n</html>\n`,
           },
           {
             name: "style.css",
@@ -189,7 +189,7 @@ export const createProject = async (req, res) => {
             type: "file",
             language: "javascript",
             mimeType: "application/javascript",
-            content: `document.getElementById("actionBtn")?.addEventListener("click", () => {\n  alert("Hello from CloudForge Static Web Workspace!");\n});\nconsole.log("☁ CloudForge Web App ready.");\n`,
+            content: `document.getElementById("actionBtn")?.addEventListener("click", () => {\n  alert("Hello from CloudForge Static Web Workspace!");\n});\nconsole.log("CloudForge Web App ready.");\n`,
           },
           {
             name: "README.md",
@@ -224,7 +224,7 @@ export const createProject = async (req, res) => {
             type: "file",
             language: "javascript",
             mimeType: "application/javascript",
-            content: `// CloudForge Cloud Workspace - Node.js 20 & TypeScript Runtime\nconsole.log("☁ CloudForge container runtime active.");\n\nfunction main() {\n  console.log("Hello from /workspace/index.js!");\n}\n\nmain();\n`,
+            content: `// CloudForge Cloud Workspace - Node.js 20 & TypeScript Runtime\nconsole.log("CloudForge container runtime active.");\n\nfunction main() {\n  console.log("Hello from /workspace/index.js!");\n}\n\nmain();\n`,
           },
           {
             name: "package.json",

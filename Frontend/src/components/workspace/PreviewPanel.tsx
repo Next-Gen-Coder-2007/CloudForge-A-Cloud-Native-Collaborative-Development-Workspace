@@ -16,6 +16,8 @@ import {
   Lock,
   Terminal,
   Trash2,
+  Zap,
+  Cloud,
 } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { previewService } from "../../services/previewService";
@@ -213,7 +215,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
     }
 
     // Process React App code for browser Babel execution
-    let appCode = reactAppFile?.content || "document.body.innerHTML = '<h1 style=\"font-family:sans-serif;text-align:center;padding:4rem;\">⚡ CloudForge Live App Ready</h1>';";
+    let appCode = reactAppFile?.content || "document.body.innerHTML = '<h1 style=\"font-family:sans-serif;text-align:center;padding:4rem;\">CloudForge Live App Ready</h1>';";
     if (reactAppFile?.content) {
       appCode = appCode
         .replace(/import\s+logo\s+from\s+['"][^'"]+['"];?/g, `const logo = "https://raw.githubusercontent.com/facebook/create-react-app/main/packages/cra-template/template/src/logo.svg";`)
@@ -434,28 +436,30 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
                 setEngineMode("live_virtual");
                 setIframeKey((k) => k + 1);
               }}
-              className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
+              className={`flex items-center gap-1 px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
                 engineMode === "live_virtual"
                   ? "bg-blue-600 text-white shadow-2xs"
                   : isDark ? "text-neutral-400 hover:text-white" : "text-neutral-600 hover:text-black"
               }`}
               title="Instant Reactive HTML/React compiler directly from workspace files"
             >
-              ⚡ Instant Live
+              <Zap className="w-3 h-3" />
+              <span>Instant Live</span>
             </button>
             <button
               onClick={() => {
                 setEngineMode("container_proxy");
                 setIframeKey((k) => k + 1);
               }}
-              className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
+              className={`flex items-center gap-1 px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
                 engineMode === "container_proxy"
                   ? "bg-blue-600 text-white shadow-2xs"
                   : isDark ? "text-neutral-400 hover:text-white" : "text-neutral-600 hover:text-black"
               }`}
               title="Reverse proxy directly to in-container backend server"
             >
-              ☁️ Cloud Container
+              <Cloud className="w-3 h-3" />
+              <span>Cloud Container</span>
             </button>
           </div>
         </div>
@@ -523,9 +527,9 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddPort(false)}
-                  className="text-[10px] text-neutral-400 hover:text-red-500 px-1 cursor-pointer"
+                  className="p-0.5 text-neutral-400 hover:text-red-500 cursor-pointer"
                 >
-                  ✕
+                  <X className="w-3 h-3" />
                 </button>
               </form>
             )}
@@ -809,7 +813,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition-all cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>⚡ View Instant Live Preview</span>
+                  <span>View Instant Live Preview</span>
                 </button>
               </div>
 

@@ -321,7 +321,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             <Layers className="w-3 h-3" />
             <span>DIFF COMPUTE: {viewType.toUpperCase()}</span>
           </span>
-          <span className="opacity-60 hidden sm:inline">ORIGINAL (LAST COMMIT) ↔ WORKING COPY</span>
+          <span className="opacity-60 hidden sm:inline">ORIGINAL (LAST COMMIT) vs WORKING COPY</span>
         </div>
 
         <div className="flex items-center gap-3">

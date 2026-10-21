@@ -84,7 +84,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               {!dockerAvailable
                 ? "Workspace Shell"
                 : containerRunning
-                ? `${cloudHosted ? "☁️ Cloud" : "🐳 Docker"}: ${containerRuntime || "Running"}`
+                ? `${cloudHosted ? "Cloud" : "Container"}: ${containerRuntime || "Running"}`
                 : "Terminal"}
             </span>
           </button>

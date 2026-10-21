@@ -1858,7 +1858,7 @@ alias npx="npx --no-audit --no-fund" 2>/dev/null || true
       shellArgs = ["-i"];
     }
 
-    const banner = `\r\n\x1b[38;2;14;165;233m┌────────────────────────────────────────────────────────┐\x1b[0m\r\n\x1b[38;2;14;165;233m│\x1b[0m  \x1b[1;32m☁ CloudForge Cloud Container Environment\x1b[0m              \x1b[38;2;14;165;233m│\x1b[0m\r\n\x1b[38;2;14;165;233m│\x1b[0m  \x1b[90mRuntime:\x1b[0m \x1b[37m${(runtime.displayName || "CloudForge Linux Container").padEnd(46, " ")}\x1b[0m\x1b[38;2;14;165;233m│\x1b[0m\r\n\x1b[38;2;14;165;233m│\x1b[0m  \x1b[90mIsolated Sandbox:\x1b[0m \x1b[35m/workspace\x1b[0m                          \x1b[38;2;14;165;233m│\x1b[0m\r\n\x1b[38;2;14;165;233m└────────────────────────────────────────────────────────┘\x1b[0m\r\n\r\n`;
+    const banner = `\r\n\x1b[38;2;14;165;233m┌────────────────────────────────────────────────────────┐\x1b[0m\r\n\x1b[38;2;14;165;233m│\x1b[0m  \x1b[1;32mCloudForge Cloud Container Environment\x1b[0m                \x1b[38;2;14;165;233m│\x1b[0m\r\n\x1b[38;2;14;165;233m│\x1b[0m  \x1b[90mRuntime:\x1b[0m \x1b[37m${(runtime.displayName || "CloudForge Linux Container").padEnd(46, " ")}\x1b[0m\x1b[38;2;14;165;233m│\x1b[0m\r\n\x1b[38;2;14;165;233m│\x1b[0m  \x1b[90mIsolated Sandbox:\x1b[0m \x1b[35m/workspace\x1b[0m                          \x1b[38;2;14;165;233m│\x1b[0m\r\n\x1b[38;2;14;165;233m└────────────────────────────────────────────────────────┘\x1b[0m\r\n\r\n`;
 
     const sanitizeChunk = (chunk) => {
       let str = chunk.toString();

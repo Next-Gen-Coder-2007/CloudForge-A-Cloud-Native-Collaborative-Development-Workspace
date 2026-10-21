@@ -15,6 +15,7 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  X,
 } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAlert } from "../../hooks/useAlert";
@@ -465,9 +466,10 @@ export const DeploymentPanel: React.FC<DeploymentPanelProps> = ({
               </div>
               <button
                 onClick={() => setShowLogsModal(false)}
-                className="text-neutral-400 hover:text-neutral-200 text-sm font-bold p-1"
+                className="text-neutral-400 hover:text-neutral-200 p-1 cursor-pointer"
+                title="Close Logs"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 

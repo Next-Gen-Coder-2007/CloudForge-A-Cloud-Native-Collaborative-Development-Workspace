@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAlert } from "../hooks/useAlert"; 
 import { useTheme } from "../context/ThemeContext";
 import { BrandLogo } from "../components/ui/BrandLogo";
+import { KeyRound } from "lucide-react";
 import API_URL from "../config/api";
 
 interface FormData {
@@ -165,13 +166,14 @@ function Login() {
             <button
               type="button"
               onClick={handleFillDemo}
-              className={`w-full py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+              className={`w-full py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all cursor-pointer flex items-center justify-center gap-2 ${
                 isDark
                   ? "border-neutral-800 bg-neutral-900/60 text-neutral-300 hover:bg-neutral-800 hover:text-white"
                   : "border-neutral-300 bg-neutral-100/70 text-neutral-700 hover:bg-neutral-200"
               }`}
             >
-              ⚡ Quick Fill Demo Account (developer@cloudforge.io)
+              <KeyRound className="w-3.5 h-3.5 text-blue-500" />
+              <span>Fill Demo Credentials (developer@cloudforge.io)</span>
             </button>
           </form>
 

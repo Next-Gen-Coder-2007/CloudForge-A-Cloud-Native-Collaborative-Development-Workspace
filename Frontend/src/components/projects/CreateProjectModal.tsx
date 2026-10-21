@@ -3,7 +3,21 @@ import { useAlert } from "../../hooks/useAlert";
 import { useTheme } from "../../context/ThemeContext";
 import API_URL, { getAuthHeaders } from "../../config/api";
 import { type CreateProjectData, type Project } from "../../types/project";
-import { Sparkles, FolderPlus, X, Check } from "lucide-react";
+import {
+  Sparkles,
+  FolderPlus,
+  X,
+  Check,
+  Code2,
+  FileCode,
+  Cpu,
+  Layers,
+  Wrench,
+  Coffee,
+  Globe,
+  Folder,
+  type LucideIcon,
+} from "lucide-react";
 
 interface CreateProjectModalProps {
   isOpen: boolean;
@@ -11,11 +25,20 @@ interface CreateProjectModalProps {
   onCreated: (project: Project) => void;
 }
 
-const RUNTIME_TEMPLATES = [
+interface RuntimeTemplate {
+  id: string;
+  name: string;
+  icon: LucideIcon;
+  badge: string;
+  color: string;
+  desc: string;
+}
+
+const RUNTIME_TEMPLATES: RuntimeTemplate[] = [
   {
     id: "node",
     name: "Node.js & TS",
-    icon: "⚡",
+    icon: Code2,
     badge: "Node 20",
     color: "#3178c6",
     desc: "JavaScript, TypeScript, Express, or full-stack APIs",
@@ -23,7 +46,7 @@ const RUNTIME_TEMPLATES = [
   {
     id: "python",
     name: "Python",
-    icon: "🐍",
+    icon: FileCode,
     badge: "Python 3.11",
     color: "#3572A5",
     desc: "FastAPI, Flask, scripts, or data processing",
@@ -31,7 +54,7 @@ const RUNTIME_TEMPLATES = [
   {
     id: "go",
     name: "Go (Golang)",
-    icon: "🐹",
+    icon: Cpu,
     badge: "Go 1.22",
     color: "#00ADD8",
     desc: "High-performance microservices and CLI tools",
@@ -39,7 +62,7 @@ const RUNTIME_TEMPLATES = [
   {
     id: "rust",
     name: "Rust",
-    icon: "🦀",
+    icon: Layers,
     badge: "Rust 1.76",
     color: "#dea584",
     desc: "Memory-safe systems programming with Cargo",
@@ -47,7 +70,7 @@ const RUNTIME_TEMPLATES = [
   {
     id: "cpp",
     name: "C / C++",
-    icon: "⚙️",
+    icon: Wrench,
     badge: "GCC 12",
     color: "#f34b7d",
     desc: "Native C and C++ programs with Makefile",
@@ -55,7 +78,7 @@ const RUNTIME_TEMPLATES = [
   {
     id: "java",
     name: "Java",
-    icon: "☕",
+    icon: Coffee,
     badge: "Java 17",
     color: "#b07219",
     desc: "Enterprise Java apps with OpenJDK 17",
@@ -63,7 +86,7 @@ const RUNTIME_TEMPLATES = [
   {
     id: "web",
     name: "Static Web",
-    icon: "🌐",
+    icon: Globe,
     badge: "HTML5/CSS",
     color: "#e34c26",
     desc: "HTML5, CSS3, and JavaScript frontend apps",
@@ -71,7 +94,7 @@ const RUNTIME_TEMPLATES = [
   {
     id: "blank",
     name: "Blank",
-    icon: "📁",
+    icon: Folder,
     badge: "Custom",
     color: "#6b7280",
     desc: "Empty workspace to build from scratch",
@@ -230,7 +253,7 @@ function CreateProjectModal({
                     )}
                     <div>
                       <div className="flex items-center gap-1.5 mb-1">
-                        <span className="text-base">{tmpl.icon}</span>
+                        <tmpl.icon className="w-4 h-4 shrink-0" style={{ color: tmpl.color }} />
                         <span className="text-xs font-bold truncate">{tmpl.name}</span>
                       </div>
                       <p
