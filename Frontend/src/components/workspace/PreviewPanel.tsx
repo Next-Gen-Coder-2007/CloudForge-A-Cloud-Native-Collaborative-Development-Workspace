@@ -81,6 +81,10 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
         if (!customCommand) {
           setCustomCommand(data.framework.startCommand);
         }
+        // If no active ports yet, default to framework's defaultPort (e.g. 3000 for React)
+        if ((!data.activePorts || data.activePorts.length === 0) && data.framework.defaultPort) {
+          setSelectedPort((prev) => (prev === 5173 || prev === 5000 ? data.framework.defaultPort : prev));
+        }
       }
       if (data.activePorts && data.activePorts.length > 0) {
         setActivePorts(data.activePorts);
@@ -99,6 +103,26 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
     const interval = setInterval(fetchPreviewData, 6000);
     return () => clearInterval(interval);
   }, [fetchPreviewData]);
+
+  // Combined active and recommended ports (ensures 3000 and 5173 are always visible tabs)
+  const displayPorts = useMemo(() => {
+    const list = [...activePorts];
+    const defaultP = framework?.defaultPort || 3000;
+    const candidates = [defaultP, 3000, 5173];
+    for (const p of candidates) {
+      if (p && !list.some((item) => item.port === p)) {
+        list.push({
+          port: p,
+          isPrimary: p === defaultP,
+          framework: p === 3000 ? "React (Port 3000)" : p === 5173 ? "Vite (Port 5173)" : (framework?.name || "Web App"),
+          url: previewService.getPreviewUrl(projectId, p),
+          containerIp: "127.0.0.1",
+          status: "idle",
+        });
+      }
+    }
+    return list.sort((a, b) => a.port - b.port);
+  }, [activePorts, framework, projectId]);
 
   // Listen to postMessage console logs from inside preview iframe
   useEffect(() => {
@@ -169,7 +193,15 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
       </script>
     `;
 
-    if (htmlFile && htmlFile.content) {
+    // Check if index.html is an unbundled SPA shell (such as Create React App / Vite)
+    const isSpaShell = htmlFile && htmlFile.content && (htmlFile.content.includes('id="root"') || htmlFile.content.includes("id='root'")) && !htmlFile.content.includes("<script src=") && !htmlFile.content.includes('<script type="module"');
+
+    // Find main React/JS entry file
+    const reactAppFile = jsFiles.find((f) => f.name === "App.js" || f.name === "App.jsx" || f.name === "App.tsx") ||
+      jsFiles.find((f) => f.name.includes("App.") || f.name.includes("main.") || f.name.includes("index."));
+
+    // If pure static HTML with actual bundled scripts or no React files, render HTML directly
+    if (htmlFile && htmlFile.content && (!isSpaShell || !reactAppFile)) {
       let content = htmlFile.content;
       // Inject console bridge & CSS
       if (content.includes("<head>")) {
@@ -180,9 +212,17 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
       return content;
     }
 
-    // React / JS App fallback renderer
-    const reactAppFile = jsFiles.find((f) => f.name.includes("App.") || f.name.includes("main.") || f.name.includes("index."));
-    const appCode = reactAppFile?.content || "document.body.innerHTML = '<h1 style=\"font-family:sans-serif;text-align:center;padding:4rem;\">⚡ CloudForge Live App Ready</h1>';";
+    // Process React App code for browser Babel execution
+    let appCode = reactAppFile?.content || "document.body.innerHTML = '<h1 style=\"font-family:sans-serif;text-align:center;padding:4rem;\">⚡ CloudForge Live App Ready</h1>';";
+    if (reactAppFile?.content) {
+      appCode = appCode
+        .replace(/import\s+logo\s+from\s+['"][^'"]+['"];?/g, `const logo = "https://raw.githubusercontent.com/facebook/create-react-app/main/packages/cra-template/template/src/logo.svg";`)
+        .replace(/import\s+['"][^'"]+\.css['"];?/g, "")
+        .replace(/import\s+React(?:\s*,\s*\{[^}]*\})?\s+from\s+['"][^'"]+['"];?/g, "")
+        .replace(/import\s+\{[^}]*\}\s+from\s+['"][^'"]+['"];?/g, "")
+        .replace(/export\s+default\s+function\s+([A-Za-z0-9_]+)/g, "function $1")
+        .replace(/export\s+default\s+([A-Za-z0-9_]+);?/g, "window.__AppExport = $1;");
+    }
 
     return `
       <!DOCTYPE html>
@@ -192,11 +232,21 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>${projectName}</title>
           <script src="https://cdn.tailwindcss.com"></script>
+          <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+          <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
           <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
           ${consoleBridge}
           ${compiledCss}
           <style>
             body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #ffffff; color: #0f172a; }
+            .App { text-align: center; }
+            .App-logo { height: 40vmin; pointer-events: none; }
+            @media (prefers-reduced-motion: no-preference) {
+              .App-logo { animation: App-logo-spin infinite 20s linear; }
+            }
+            .App-header { background-color: #282c34; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: calc(10px + 2vmin); color: white; }
+            .App-link { color: #61dafb; }
+            @keyframes App-logo-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
           </style>
         </head>
         <body>
@@ -204,6 +254,11 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
           <script type="text/babel">
             try {
               ${appCode}
+              const TargetApp = window.__AppExport || (typeof App !== 'undefined' ? App : null);
+              if (TargetApp) {
+                const root = ReactDOM.createRoot(document.getElementById('root'));
+                root.render(React.createElement(TargetApp));
+              }
             } catch(err) {
               console.error(err);
               document.getElementById('root').innerHTML = '<div style="padding:2rem;color:#ef4444;font-family:monospace;"><h3>Runtime Error</h3><p>' + err.message + '</p></div>';
@@ -411,7 +466,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
           <div className={`flex items-center gap-1 p-0.5 rounded-lg border ${
             isDark ? "bg-neutral-900/60 border-neutral-800" : "bg-neutral-100 border-neutral-200"
           }`}>
-            {activePorts.map((p) => {
+            {displayPorts.map((p) => {
               const isSelected = p.port === selectedPort;
               return (
                 <button
@@ -427,11 +482,11 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
                       ? "text-neutral-400 hover:text-white hover:bg-neutral-800"
                       : "text-neutral-600 hover:text-black hover:bg-neutral-200"
                   }`}
-                  title={`Preview port :${p.port}`}
+                  title={`Preview port :${p.port} (${p.status === "active" ? "Active" : "Idle"})`}
                 >
                   <span
                     className={`w-1.5 h-1.5 rounded-full ${
-                      p.status === "active" ? "bg-emerald-400 animate-pulse" : isDark ? "bg-neutral-500" : "bg-neutral-400"
+                      p.status === "active" ? "bg-emerald-400 animate-pulse" : isDark ? "bg-neutral-600" : "bg-neutral-400"
                     }`}
                   />
                   <span>:{p.port}</span>
@@ -722,17 +777,64 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
               : "w-full h-full"
           }`}
         >
-          {/* Iframe View: Renders Live Virtual Compiled HTML or Container Proxy */}
-          <iframe
-            key={`${iframeKey}-${activeEngine}`}
-            ref={iframeRef}
-            src={activeEngine === "container_proxy" ? rawProxyUrl : undefined}
-            srcDoc={activeEngine === "live_virtual" ? virtualLiveHtml : undefined}
-            onLoad={() => setIsLoading(false)}
-            title={`${projectName} Preview`}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
-            className="w-full h-full border-0 bg-white"
-          />
+          {/* If container_proxy mode is selected but the dev server is not active on selectedPort */}
+          {activeEngine === "container_proxy" && !isCurrentPortActive ? (
+            <div className={`w-full h-full flex flex-col items-center justify-center p-6 text-center ${
+              isDark ? "bg-[#0d1117] text-neutral-300" : "bg-neutral-50 text-neutral-700"
+            }`}>
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-4 text-blue-400">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-semibold mb-1">
+                Port :{selectedPort} is waiting for dev server
+              </h3>
+              <p className="text-xs text-neutral-400 max-w-md mb-5 leading-relaxed">
+                {framework?.name || "Your application"} has not started listening on port <span className="font-mono text-blue-400">:{selectedPort}</span> yet.
+              </p>
+
+              <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+                <button
+                  onClick={handleStartServer}
+                  disabled={isServerStarting}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>{isServerStarting ? "Starting Dev Server..." : "Start Dev Server"}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setEngineMode("live_virtual");
+                    setIframeKey((k) => k + 1);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>⚡ View Instant Live Preview</span>
+                </button>
+              </div>
+
+              <div className={`px-4 py-2.5 rounded-lg border text-xs font-mono max-w-md text-left ${
+                isDark ? "bg-black/60 border-neutral-800 text-neutral-400" : "bg-white border-neutral-200 text-neutral-600 shadow-xs"
+              }`}>
+                <span className="text-neutral-500 block text-[10px] uppercase font-sans font-semibold mb-1">
+                  Terminal Command:
+                </span>
+                <span className="text-emerald-400">$ </span>
+                {customCommand || framework?.startCommand || (framework?.subDirectory ? `cd ${framework.subDirectory} && npm start` : "npm start")}
+              </div>
+            </div>
+          ) : (
+            <iframe
+              key={`${iframeKey}-${activeEngine}`}
+              ref={iframeRef}
+              src={activeEngine === "container_proxy" ? rawProxyUrl : undefined}
+              srcDoc={activeEngine === "live_virtual" ? virtualLiveHtml : undefined}
+              onLoad={() => setIsLoading(false)}
+              title={`${projectName} Preview`}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
+              className="w-full h-full border-0 bg-white"
+            />
+          )}
         </div>
 
         {/* 4. In-Preview Live Developer Console Drawer */}

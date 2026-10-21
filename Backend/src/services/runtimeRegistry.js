@@ -25,6 +25,25 @@ export const FRAMEWORKS = [
     },
   },
   {
+    id: "react-cra",
+    name: "React (Create React App)",
+    category: "frontend",
+    runtime: "node",
+    icon: "react",
+    description: "React Single Page Application with react-scripts",
+    defaultPort: 3000,
+    commonPorts: [3000, 3001, 8080],
+    defaultCommand: "npm start",
+    fallbackCommand: "npx react-scripts start",
+    match: (files, pkg) => {
+      const deps = { ...(pkg?.dependencies || {}), ...(pkg?.devDependencies || {}) };
+      return Boolean(
+        deps["react-scripts"] ||
+        (deps["react"] && !deps["vite"] && !deps["next"] && !deps["gatsby"] && !deps["@remix-run/react"])
+      );
+    },
+  },
+  {
     id: "vite-vue",
     name: "Vite (Vue)",
     category: "frontend",
@@ -340,14 +359,49 @@ class RuntimeRegistryService {
     try {
       const files = await ProjectFile.find({ projectId }).select("name path content type");
       
-      // Parse package.json if present
+      // Parse package.json if present (check root first, or any subfolder e.g. /hello/package.json)
       let pkgJson = null;
-      const pkgFile = files.find((f) => f.name === "package.json");
-      if (pkgFile && pkgFile.content) {
+      let appSubdir = "";
+      const pkgFiles = files.filter((f) => f.name === "package.json");
+
+      // Check all package.json files, prioritizing one with actual modern frontend/backend dependencies
+      for (const pf of pkgFiles) {
+        if (!pf.content) continue;
         try {
-          pkgJson = JSON.parse(pkgFile.content);
+          const parsed = JSON.parse(pf.content);
+          const allDeps = { ...(parsed?.dependencies || {}), ...(parsed?.devDependencies || {}) };
+          if (
+            allDeps["react"] ||
+            allDeps["react-scripts"] ||
+            allDeps["vite"] ||
+            allDeps["next"] ||
+            allDeps["vue"] ||
+            allDeps["svelte"] ||
+            allDeps["express"] ||
+            allDeps["nest"] ||
+            allDeps["nuxt"]
+          ) {
+            pkgJson = parsed;
+            const normPath = (pf.path || "").replace(/^\/+/, "");
+            const parts = normPath.split("/");
+            if (parts.length > 1) {
+              parts.pop(); // remove 'package.json'
+              appSubdir = parts.join("/");
+            }
+            break;
+          }
         } catch {
-          // invalid json, ignore
+          // ignore
+        }
+      }
+
+      // If no specialized package.json found, take root package.json if available
+      if (!pkgJson && pkgFiles.length > 0) {
+        const rootPkg = pkgFiles.find((f) => f.path === "/package.json" || f.path === "package.json") || pkgFiles[0];
+        if (rootPkg && rootPkg.content) {
+          try {
+            pkgJson = JSON.parse(rootPkg.content);
+          } catch {}
         }
       }
 
@@ -377,6 +431,10 @@ class RuntimeRegistryService {
             } else if (pkgJson.scripts.serve) {
               startCommand = "npm run serve";
             }
+          }
+
+          if (appSubdir) {
+            startCommand = `cd ${appSubdir} && ${startCommand}`;
           }
 
           // If Python main file is app.py vs main.py vs server.py
@@ -412,8 +470,9 @@ class RuntimeRegistryService {
             defaultPort: fw.defaultPort,
             commonPorts: fw.commonPorts || [fw.defaultPort],
             startCommand,
-            fallbackCommand: fw.fallbackCommand,
+            fallbackCommand: appSubdir ? `cd ${appSubdir} && ${fw.fallbackCommand}` : fw.fallbackCommand,
             scripts: pkgJson?.scripts || {},
+            subDirectory: appSubdir,
           };
         }
       }

@@ -186,9 +186,9 @@ class TerminalGateway {
             case "input":
               if (msg.data && ptySession && ptySession.write) {
                 ptySession.write(msg.data);
-                // If user pressed Enter, schedule disk sync to pick up created/modified files
+                // If user pressed Enter, schedule disk sync to pick up created/modified files after command runs
                 if (typeof msg.data === "string" && (msg.data.includes("\r") || msg.data.includes("\n"))) {
-                  containerService.scheduleDiskSync(projectId, 800);
+                  containerService.scheduleDiskSync(projectId, 2500);
                 }
               }
               break;

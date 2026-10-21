@@ -155,9 +155,15 @@ class PortDetectorService {
       }
     }
 
+    const backendPort = parseInt(process.env.PORT || "5000", 10);
+    const runnerPort = parseInt(process.env.RUNNER_PORT || "5050", 10);
+
     // 2. Fallback check on 127.0.0.1 for local host execution
     if (activePorts.length === 0) {
       for (const port of portsToProbe) {
+        // Exclude CloudForge's own internal services from being reported as app preview ports
+        if (port === backendPort || port === runnerPort) continue;
+
         const isOpen = await this._checkPort("127.0.0.1", port, 250);
         if (isOpen) {
           activePorts.push({

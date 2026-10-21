@@ -10,6 +10,7 @@ export interface DetectedFramework {
   startCommand: string;
   fallbackCommand: string;
   scripts?: Record<string, string>;
+  subDirectory?: string;
 }
 
 export interface ActivePort {

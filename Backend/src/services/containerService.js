@@ -443,139 +443,167 @@ class ContainerService {
    * and broadcast real-time updates to all connected workspace clients without page reload.
    */
   async syncDiskToDatabase(projectId) {
-    const workspaceDir = this.getProjectWorkspaceDir(projectId);
-    if (!fs.existsSync(workspaceDir)) return [];
+    const pId = projectId.toString();
+    if (!this._activeSyncs) this._activeSyncs = new Set();
+    if (!this._pendingSyncs) this._pendingSyncs = new Set();
 
-    const IGNORED_NAMES = new Set([
-      "node_modules",
-      ".git",
-      ".npm",
-      ".cache",
-      "dist",
-      ".next",
-      "__pycache__",
-      ".venv",
-      ".turbo",
-      ".DS_Store",
-      "Thumbs.db",
-    ]);
+    if (this._activeSyncs.has(pId)) {
+      this._pendingSyncs.add(pId);
+      return [];
+    }
+    this._activeSyncs.add(pId);
 
-    const diskFiles = [];
+    try {
+      const workspaceDir = this.getProjectWorkspaceDir(projectId);
+      if (!fs.existsSync(workspaceDir)) return [];
 
-    const walk = (currentDir, relativePrefix = "") => {
-      let entries = [];
-      try {
-        entries = fs.readdirSync(currentDir, { withFileTypes: true });
-      } catch {
-        return;
+      const IGNORED_NAMES = new Set([
+        "node_modules",
+        ".git",
+        ".npm",
+        ".cache",
+        "dist",
+        ".next",
+        "__pycache__",
+        ".venv",
+        ".turbo",
+        ".DS_Store",
+        "Thumbs.db",
+      ]);
+
+      const SKIP_CONTENT_FILES = new Set([
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "composer.lock",
+        "cargo.lock",
+        "poetry.lock",
+      ]);
+
+      const diskFiles = [];
+
+      const walk = (currentDir, relativePrefix = "") => {
+        let entries = [];
+        try {
+          entries = fs.readdirSync(currentDir, { withFileTypes: true });
+        } catch {
+          return;
+        }
+
+        for (const entry of entries) {
+          const name = entry.name;
+          if (IGNORED_NAMES.has(name) || name.startsWith(".cloudforge_rc")) continue;
+
+          const fullPath = path.join(currentDir, name);
+          const relPath = relativePrefix ? `${relativePrefix}/${name}` : name;
+          const normalizedPath = `/${relPath}`;
+
+          if (entry.isDirectory()) {
+            diskFiles.push({
+              name,
+              path: normalizedPath,
+              type: "directory",
+              content: "",
+              size: 0,
+              language: "directory",
+              mimeType: "inode/directory",
+            });
+            walk(fullPath, relPath);
+          } else if (entry.isFile()) {
+            let content = "";
+            let size = 0;
+            try {
+              const stat = fs.statSync(fullPath);
+              size = stat.size;
+              // Avoid loading huge lockfiles or files > 256KB into memory/DB to prevent event-loop stalls
+              const skipContent = SKIP_CONTENT_FILES.has(name) || name.endsWith(".map") || name.endsWith(".min.js");
+              if (!skipContent && size <= 256 * 1024) {
+                content = fs.readFileSync(fullPath, "utf8");
+              }
+            } catch {
+              // Ignore unreadable or locked files
+            }
+
+            diskFiles.push({
+              name,
+              path: normalizedPath,
+              type: "file",
+              content,
+              size,
+              language: this._detectFileLanguage(name),
+              mimeType: this._detectFileMimeType(name),
+            });
+          }
+        }
+      };
+
+      walk(workspaceDir);
+
+      const dbFiles = await ProjectFile.find({ projectId });
+      const dbPathMap = new Map();
+      for (const f of dbFiles) {
+        const p = f.path || `/${f.name}`;
+        dbPathMap.set(p, f);
       }
 
-      for (const entry of entries) {
-        const name = entry.name;
-        if (IGNORED_NAMES.has(name) || name.startsWith(".cloudforge_rc")) continue;
+      const diskPathSet = new Set();
+      let hasChanges = false;
 
-        const fullPath = path.join(currentDir, name);
-        const relPath = relativePrefix ? `${relativePrefix}/${name}` : name;
-        const normalizedPath = `/${relPath}`;
+      // 1. Insert newly created files or update modified files from disk
+      for (const item of diskFiles) {
+        diskPathSet.add(item.path);
+        const existing = dbPathMap.get(item.path);
 
-        if (entry.isDirectory()) {
-          diskFiles.push({
-            name,
-            path: normalizedPath,
-            type: "directory",
-            content: "",
-            size: 0,
-            language: "directory",
-            mimeType: "inode/directory",
+        if (!existing) {
+          await ProjectFile.create({
+            projectId,
+            name: item.name,
+            path: item.path,
+            type: item.type,
+            language: item.language,
+            mimeType: item.mimeType,
+            content: item.content,
+            size: item.size,
           });
-          walk(fullPath, relPath);
-        } else if (entry.isFile()) {
-          let content = "";
-          let size = 0;
-          try {
-            const stat = fs.statSync(fullPath);
-            size = stat.size;
-            // Read content for text/code files up to 3MB
-            if (size <= 3 * 1024 * 1024) {
-              content = fs.readFileSync(fullPath, "utf8");
-            }
-          } catch {
-            // Ignore unreadable or locked files
-          }
+          hasChanges = true;
+        } else if (item.type === "file" && existing.content !== item.content) {
+          existing.content = item.content;
+          existing.size = item.size;
+          existing.updatedAt = new Date();
+          await existing.save();
+          hasChanges = true;
+        }
+      }
 
-          diskFiles.push({
-            name,
-            path: normalizedPath,
-            type: "file",
-            content,
-            size,
-            language: this._detectFileLanguage(name),
-            mimeType: this._detectFileMimeType(name),
+      // 2. Remove files deleted from disk (except ignored paths)
+      for (const [p, dbFile] of dbPathMap.entries()) {
+        if (IGNORED_NAMES.has(dbFile.name) || p.includes("/node_modules/")) continue;
+        if (!diskPathSet.has(p)) {
+          await ProjectFile.findByIdAndDelete(dbFile._id);
+          hasChanges = true;
+        }
+      }
+
+      // 3. Return all updated files and broadcast real-time event to project room
+      const allUpdatedFiles = await ProjectFile.find({ projectId }).sort({ type: -1, name: 1 });
+      if (hasChanges) {
+        const gateway = await this._getCollaborationGateway();
+        if (gateway && gateway.broadcastToRoom) {
+          gateway.broadcastToRoom(projectId, {
+            type: "workspace_updated",
+            files: allUpdatedFiles,
           });
         }
       }
-    };
 
-    walk(workspaceDir);
-
-    const dbFiles = await ProjectFile.find({ projectId });
-    const dbPathMap = new Map();
-    for (const f of dbFiles) {
-      const p = f.path || `/${f.name}`;
-      dbPathMap.set(p, f);
-    }
-
-    const diskPathSet = new Set();
-    let hasChanges = false;
-
-    // 1. Insert newly created files or update modified files from disk
-    for (const item of diskFiles) {
-      diskPathSet.add(item.path);
-      const existing = dbPathMap.get(item.path);
-
-      if (!existing) {
-        await ProjectFile.create({
-          projectId,
-          name: item.name,
-          path: item.path,
-          type: item.type,
-          language: item.language,
-          mimeType: item.mimeType,
-          content: item.content,
-          size: item.size,
-        });
-        hasChanges = true;
-      } else if (item.type === "file" && existing.content !== item.content) {
-        existing.content = item.content;
-        existing.size = item.size;
-        existing.updatedAt = new Date();
-        await existing.save();
-        hasChanges = true;
+      return allUpdatedFiles;
+    } finally {
+      this._activeSyncs.delete(pId);
+      if (this._pendingSyncs.has(pId)) {
+        this._pendingSyncs.delete(pId);
+        setTimeout(() => this.syncDiskToDatabase(projectId).catch(() => {}), 500);
       }
     }
-
-    // 2. Remove files deleted from disk (except ignored paths)
-    for (const [p, dbFile] of dbPathMap.entries()) {
-      if (IGNORED_NAMES.has(dbFile.name) || p.includes("/node_modules/")) continue;
-      if (!diskPathSet.has(p)) {
-        await ProjectFile.findByIdAndDelete(dbFile._id);
-        hasChanges = true;
-      }
-    }
-
-    // 3. Return all updated files and broadcast real-time event to project room
-    const allUpdatedFiles = await ProjectFile.find({ projectId }).sort({ type: -1, name: 1 });
-    if (hasChanges) {
-      const gateway = await this._getCollaborationGateway();
-      if (gateway && gateway.broadcastToRoom) {
-        gateway.broadcastToRoom(projectId, {
-          type: "workspace_updated",
-          files: allUpdatedFiles,
-        });
-      }
-    }
-
-    return allUpdatedFiles;
   }
 
   /**
@@ -638,7 +666,7 @@ class ContainerService {
         ) {
           return;
         }
-        this.scheduleDiskSync(projectId, 500);
+        this.scheduleDiskSync(projectId, 1800);
       });
 
       this.workspaceWatchers.set(projectId, watcher);
@@ -1437,8 +1465,23 @@ class ContainerService {
    */
   _sanitizeOutputPaths(text, workspaceDir) {
     if (!text || typeof text !== "string") return text;
+    // Fast-path: keystroke echoes and short CLI output never contain host paths or banners
+    if (text.length < 8 && !text.includes(":") && !text.includes("/") && !text.includes("\\")) {
+      return text;
+    }
+
+    // Fast-path: if text does not contain any suspicious host substring, skip heavy regexes
+    const hasStorage = text.includes("storage");
+    const hasRender = text.includes("render");
+    const hasMs = text.includes("Microsoft");
+    const hasWs = workspaceDir && text.includes(workspaceDir);
+
+    if (!hasStorage && !hasRender && !hasMs && !hasWs) {
+      return text;
+    }
+
     let sanitized = text;
-    if (workspaceDir) {
+    if (workspaceDir && hasWs) {
       const normalizedFs = workspaceDir.replace(/\\/g, "/");
       const normalizedBs = workspaceDir.replace(/\//g, "\\");
       const mingwPath = normalizedFs.replace(/^([a-zA-Z]):/, (_, drive) => `/${drive.toLowerCase()}`);
@@ -1450,26 +1493,34 @@ class ContainerService {
         .split(mingwPath).join("/workspace");
     }
 
-    // Windows storage workspace paths
-    sanitized = sanitized.replace(/[a-zA-Z]:[\\/][^ \r\n\t"']+[\\/]storage[\\/]workspaces[\\/][a-f0-9]+[\\/]workspace/gi, "/workspace");
-    sanitized = sanitized.replace(/[a-zA-Z]:[\\/][^ \r\n\t"']+[\\/]storage[\\/]workspaces[\\/][a-f0-9]+/gi, "/workspace");
-    sanitized = sanitized.replace(/[a-zA-Z]:[\\/][^ \r\n\t"']+[\\/]storage[\\/]workspaces/gi, "/workspace");
+    if (hasStorage) {
+      // Windows storage workspace paths
+      sanitized = sanitized.replace(/[a-zA-Z]:[\\/][^ \r\n\t"']+[\\/]storage[\\/]workspaces[\\/][a-f0-9]+[\\/]workspace/gi, "/workspace");
+      sanitized = sanitized.replace(/[a-zA-Z]:[\\/][^ \r\n\t"']+[\\/]storage[\\/]workspaces[\\/][a-f0-9]+/gi, "/workspace");
+      sanitized = sanitized.replace(/[a-zA-Z]:[\\/][^ \r\n\t"']+[\\/]storage[\\/]workspaces/gi, "/workspace");
 
-    // Linux & Unix storage workspace paths (Render, Linux hosts, containers)
-    sanitized = sanitized.replace(/\/[^ \r\n\t"']+\/storage\/workspaces\/[a-f0-9]+\/workspace/g, "/workspace");
-    sanitized = sanitized.replace(/\/[^ \r\n\t"']+\/storage\/workspaces\/[a-f0-9]+/g, "/workspace");
-    sanitized = sanitized.replace(/\/[^ \r\n\t"']+\/storage\/workspaces/g, "/workspace");
-    sanitized = sanitized.replace(/\/opt\/render\/project\/src\/Backend\/storage[^\s"'`\(\)]*/g, "/workspace");
-    sanitized = sanitized.replace(/\/opt\/render\/project\/[^\s"'`\(\)]*/g, "/workspace");
-    sanitized = sanitized.replace(/\/home\/render[^\s"'`\(\)]*/g, "/workspace");
+      // Linux & Unix storage workspace paths (Render, Linux hosts, containers)
+      sanitized = sanitized.replace(/\/[^ \r\n\t"']+\/storage\/workspaces\/[a-f0-9]+\/workspace/g, "/workspace");
+      sanitized = sanitized.replace(/\/[^ \r\n\t"']+\/storage\/workspaces\/[a-f0-9]+/g, "/workspace");
+      sanitized = sanitized.replace(/\/[^ \r\n\t"']+\/storage\/workspaces/g, "/workspace");
+    }
 
-    // Host user prompts (e.g. render@srv-...:~$)
-    sanitized = sanitized.replace(/render@srv-[a-zA-Z0-9_-]+:[^$#\r\n]*([$#])/g, "developer@cloudforge:/workspace$1");
-    sanitized = sanitized.replace(/render@srv-[a-zA-Z0-9_-]+/g, "developer@cloudforge");
+    if (hasRender) {
+      sanitized = sanitized.replace(/\/opt\/render\/project\/src\/Backend\/storage[^\s"'`\(\)]*/g, "/workspace");
+      sanitized = sanitized.replace(/\/opt\/render\/project\/[^\s"'`\(\)]*/g, "/workspace");
+      sanitized = sanitized.replace(/\/home\/render[^\s"'`\(\)]*/g, "/workspace");
 
-    // Windows banner cleanup
-    sanitized = sanitized.replace(/Microsoft Windows \[Version [^\]]+\]/g, "CloudForge Cloud Linux Kernel 6.1-cloudforge");
-    sanitized = sanitized.replace(/Copyright \(c\) Microsoft Corporation[^\r\n]*/g, "All rights reserved. CloudForge Isolated Container Runtime.");
+      // Host user prompts (e.g. render@srv-...:~$)
+      sanitized = sanitized.replace(/render@srv-[a-zA-Z0-9_-]+:[^$#\r\n]*([$#])/g, "developer@cloudforge:/workspace$1");
+      sanitized = sanitized.replace(/render@srv-[a-zA-Z0-9_-]+/g, "developer@cloudforge");
+    }
+
+    if (hasMs) {
+      // Windows banner cleanup
+      sanitized = sanitized.replace(/Microsoft Windows \[Version [^\]]+\]/g, "CloudForge Cloud Linux Kernel 6.1-cloudforge");
+      sanitized = sanitized.replace(/Copyright \(c\) Microsoft Corporation[^\r\n]*/g, "All rights reserved. CloudForge Isolated Container Runtime.");
+    }
+
     return sanitized;
   }
 
